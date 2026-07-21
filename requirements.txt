@@ -1,0 +1,10 @@
+# CharacterPose ComfyUI custom nodes
+# Soft deps: comfyui_controlnet_aux (DWPreprocessor), ComfyUI_IPAdapter_plus (CharacterRender/Repair)
+numpy>=1.22.0,<2
+opencv-python-headless>=4.8.0
+Pillow>=9.0.0
+safetensors>=0.4.0
+scikit-learn>=1.2.0
+scipy>=1.10.0
+# Optional fallback when DWPose / controlnet_aux is unavailable:
+# mediapipe>=0.10.0

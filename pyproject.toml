@@ -1,0 +1,22 @@
+[project]
+name = "comfyui-character-pose"
+description = "ComfyUI nodes for identity-preserving 2D character pose transfer (sprite A → sprite B)."
+version = "0.4.0"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.22.0,<2",
+    "opencv-python-headless>=4.8.0",
+    "Pillow>=9.0.0",
+    "safetensors>=0.4.0",
+    "scikit-learn>=1.2.0",
+    "scipy>=1.10.0",
+]
+
+[project.urls]
+Repository = "https://github.com/YOUR_USER/ComfyUI_CharacterPose"
+
+[tool.comfy]
+PublisherId = "characterpose"
+DisplayName = "Character Pose"
+Icon = ""

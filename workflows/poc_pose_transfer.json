@@ -1,0 +1,383 @@
+{
+  "last_node_id": 20,
+  "last_link_id": 30,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "pos": [40, 80],
+      "size": [320, 100],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "outputs": [
+        {"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0},
+        {"name": "CLIP", "type": "CLIP", "links": [2, 3], "slot_index": 1},
+        {"name": "VAE", "type": "VAE", "links": [4], "slot_index": 2}
+      ],
+      "properties": {
+        "Node name for S&R": "CheckpointLoaderSimple",
+        "models": [
+          {
+            "name": "sd_xl_base_1.0.safetensors",
+            "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+            "directory": "checkpoints"
+          }
+        ]
+      },
+      "widgets_values": ["sd_xl_base_1.0.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "LoadImage",
+      "pos": [40, 260],
+      "size": [320, 314],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [5, 6], "slot_index": 0},
+        {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "LoadImage"},
+      "widgets_values": ["character_ref.png", "image"]
+    },
+    {
+      "id": 3,
+      "type": "LoadImage",
+      "pos": [40, 640],
+      "size": [320, 314],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [7], "slot_index": 0},
+        {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}
+      ],
+      "title": "Target Pose Reference (or OpenPose skeleton)",
+      "properties": {"Node name for S&R": "LoadImage"},
+      "widgets_values": ["target_pose.png", "image"]
+    },
+    {
+      "id": 4,
+      "type": "DWPreprocessor",
+      "pos": [420, 640],
+      "size": [315, 200],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "image", "type": "IMAGE", "link": 7}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [8], "slot_index": 0},
+        {"name": "POSE_KEYPOINT", "type": "POSE_KEYPOINT", "links": null, "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "DWPreprocessor"},
+      "widgets_values": ["enable", "enable", "enable", 1024, "yolox_l.onnx", "dw-ll_ucoco_384.onnx", "disable"]
+    },
+    {
+      "id": 5,
+      "type": "ControlNetLoader",
+      "pos": [420, 80],
+      "size": [340, 60],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "outputs": [
+        {"name": "CONTROL_NET", "type": "CONTROL_NET", "links": [9], "slot_index": 0}
+      ],
+      "properties": {
+        "Node name for S&R": "ControlNetLoader",
+        "models": [
+          {
+            "name": "OpenPoseXL2.safetensors",
+            "url": "https://huggingface.co/thibaud/controlnet-openpose-sdxl-1.0/resolve/main/OpenPoseXL2.safetensors",
+            "directory": "controlnet"
+          }
+        ]
+      },
+      "widgets_values": ["OpenPoseXL2.safetensors"]
+    },
+    {
+      "id": 6,
+      "type": "CLIPVisionLoader",
+      "pos": [420, 200],
+      "size": [340, 60],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "outputs": [
+        {"name": "CLIP_VISION", "type": "CLIP_VISION", "links": [10], "slot_index": 0}
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPVisionLoader",
+        "models": [
+          {
+            "name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/CLIP-ViT-H-14-laion2B-s32B-b79K_repackaged/resolve/main/split_files/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+            "directory": "clip_vision"
+          }
+        ]
+      },
+      "widgets_values": ["CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors"]
+    },
+    {
+      "id": 7,
+      "type": "IPAdapterModelLoader",
+      "pos": [420, 320],
+      "size": [340, 60],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "outputs": [
+        {"name": "IPADAPTER", "type": "IPADAPTER", "links": [11], "slot_index": 0}
+      ],
+      "properties": {
+        "Node name for S&R": "IPAdapterModelLoader",
+        "models": [
+          {
+            "name": "ip-adapter-plus_sdxl_vit-h.safetensors",
+            "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors",
+            "directory": "ipadapter"
+          }
+        ]
+      },
+      "widgets_values": ["ip-adapter-plus_sdxl_vit-h.safetensors"]
+    },
+    {
+      "id": 8,
+      "type": "CLIPTextEncode",
+      "pos": [820, 40],
+      "size": [400, 160],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 2}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [12], "slot_index": 0}
+      ],
+      "title": "Positive",
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": ["same character, full body sprite, clean lines, consistent outfit, high quality"]
+    },
+    {
+      "id": 9,
+      "type": "CLIPTextEncode",
+      "pos": [820, 240],
+      "size": [400, 160],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {"name": "clip", "type": "CLIP", "link": 3}
+      ],
+      "outputs": [
+        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [13], "slot_index": 0}
+      ],
+      "title": "Negative",
+      "properties": {"Node name for S&R": "CLIPTextEncode"},
+      "widgets_values": ["blurry, deformed hands, extra limbs, different character, watermark, text"]
+    },
+    {
+      "id": 10,
+      "type": "IPAdapterAdvanced",
+      "pos": [820, 440],
+      "size": [340, 300],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 1},
+        {"name": "ipadapter", "type": "IPADAPTER", "link": 11},
+        {"name": "image", "type": "IMAGE", "link": 5},
+        {"name": "clip_vision", "type": "CLIP_VISION", "link": 10}
+      ],
+      "outputs": [
+        {"name": "MODEL", "type": "MODEL", "links": [14], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "IPAdapterAdvanced"},
+      "widgets_values": [0.75, 0.0, 1.0, "linear", "concat", "V only", 0, null, null]
+    },
+    {
+      "id": 11,
+      "type": "ControlNetApplyAdvanced",
+      "pos": [1260, 200],
+      "size": [320, 186],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {"name": "positive", "type": "CONDITIONING", "link": 12},
+        {"name": "negative", "type": "CONDITIONING", "link": 13},
+        {"name": "control_net", "type": "CONTROL_NET", "link": 9},
+        {"name": "image", "type": "IMAGE", "link": 8}
+      ],
+      "outputs": [
+        {"name": "positive", "type": "CONDITIONING", "links": [15], "slot_index": 0},
+        {"name": "negative", "type": "CONDITIONING", "links": [16], "slot_index": 1}
+      ],
+      "properties": {"Node name for S&R": "ControlNetApplyAdvanced"},
+      "widgets_values": [0.85, 0.0, 1.0]
+    },
+    {
+      "id": 12,
+      "type": "EmptyLatentImage",
+      "pos": [1260, 460],
+      "size": [320, 110],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "outputs": [
+        {"name": "LATENT", "type": "LATENT", "links": [17], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "EmptyLatentImage"},
+      "widgets_values": [1024, 1024, 1]
+    },
+    {
+      "id": 13,
+      "type": "KSampler",
+      "pos": [1660, 200],
+      "size": [320, 262],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "MODEL", "link": 14},
+        {"name": "positive", "type": "CONDITIONING", "link": 15},
+        {"name": "negative", "type": "CONDITIONING", "link": 16},
+        {"name": "latent_image", "type": "LATENT", "link": 17}
+      ],
+      "outputs": [
+        {"name": "LATENT", "type": "LATENT", "links": [18], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "KSampler"},
+      "widgets_values": [42, "fixed", 28, 6.5, "euler_ancestral", "normal", 1.0]
+    },
+    {
+      "id": 14,
+      "type": "VAEDecode",
+      "pos": [2060, 200],
+      "size": [210, 50],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {"name": "samples", "type": "LATENT", "link": 18},
+        {"name": "vae", "type": "VAE", "link": 4}
+      ],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [19], "slot_index": 0}
+      ],
+      "properties": {"Node name for S&R": "VAEDecode"}
+    },
+    {
+      "id": 15,
+      "type": "SaveImage",
+      "pos": [2360, 200],
+      "size": [320, 270],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 19}
+      ],
+      "properties": {"Node name for S&R": "SaveImage"},
+      "widgets_values": ["character_pose_poc"]
+    },
+    {
+      "id": 16,
+      "type": "Note",
+      "pos": [40, 1000],
+      "size": [700, 220],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "properties": {"text": ""},
+      "widgets_values": [
+        "CharacterPose PoC (Phase 0)\n\nModels:\nIf ComfyUI reports Missing Models on open, use Missing Models / Download — links are embedded in this workflow (HF direct).\nExpected folders: models/checkpoints, models/controlnet, models/clip_vision, models/ipadapter.\n\nCustom nodes (via Manager):\n- comfyui_controlnet_aux (DWPreprocessor)\n- ComfyUI_IPAdapter_plus\n\nUsage:\n1. Load character sprite in node 2 (identity reference).\n2. Load a target pose photo OR an OpenPose skeleton image in node 3.\n3. Adjust IP-Adapter weight (0.6-0.85) and ControlNet strength (0.7-0.95).\n4. Queue prompt and check identity retention + pose change.\n\nAfter validation, use CharacterPose custom nodes instead of this manual graph."
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 10, 0, "MODEL"],
+    [2, 1, 1, 8, 0, "CLIP"],
+    [3, 1, 1, 9, 0, "CLIP"],
+    [4, 1, 2, 14, 1, "VAE"],
+    [5, 2, 0, 10, 2, "IMAGE"],
+    [6, 2, 0, 10, 2, "IMAGE"],
+    [7, 3, 0, 4, 0, "IMAGE"],
+    [8, 4, 0, 11, 3, "IMAGE"],
+    [9, 5, 0, 11, 2, "CONTROL_NET"],
+    [10, 6, 0, 10, 3, "CLIP_VISION"],
+    [11, 7, 0, 10, 1, "IPADAPTER"],
+    [12, 8, 0, 11, 0, "CONDITIONING"],
+    [13, 9, 0, 11, 1, "CONDITIONING"],
+    [14, 10, 0, 13, 0, "MODEL"],
+    [15, 11, 0, 13, 1, "CONDITIONING"],
+    [16, 11, 1, 13, 2, "CONDITIONING"],
+    [17, 12, 0, 13, 3, "LATENT"],
+    [18, 13, 0, 14, 0, "LATENT"],
+    [19, 14, 0, 15, 0, "IMAGE"]
+  ],
+  "groups": [
+    {
+      "title": "Models",
+      "bounding": [20, 40, 760, 400],
+      "color": "#3f789e"
+    },
+    {
+      "title": "Identity + Pose",
+      "bounding": [20, 460, 760, 500],
+      "color": "#8A8"
+    },
+    {
+      "title": "Generate",
+      "bounding": [800, 20, 1900, 720],
+      "color": "#b58b2a"
+    }
+  ],
+  "config": {},
+  "extra": {
+    "ds": {"scale": 0.7, "offset": [0, 0]},
+    "info": {
+      "name": "CharacterPose PoC — Pose Transfer",
+      "author": "CharacterPose",
+      "description": "Validate identity-preserving pose transfer with DWPose + ControlNet OpenPose SDXL + IP-Adapter before using custom nodes.",
+      "version": "0.1.1",
+      "prerequisites": [
+        "comfyui_controlnet_aux",
+        "ComfyUI_IPAdapter_plus",
+        "SDXL checkpoint",
+        "ControlNet OpenPose SDXL",
+        "IP-Adapter Plus SDXL",
+        "CLIP Vision ViT-H"
+      ]
+    }
+  },
+  "models": [
+    {
+      "name": "sd_xl_base_1.0.safetensors",
+      "url": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+      "directory": "checkpoints"
+    },
+    {
+      "name": "OpenPoseXL2.safetensors",
+      "url": "https://huggingface.co/thibaud/controlnet-openpose-sdxl-1.0/resolve/main/OpenPoseXL2.safetensors",
+      "directory": "controlnet"
+    },
+    {
+      "name": "CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/CLIP-ViT-H-14-laion2B-s32B-b79K_repackaged/resolve/main/split_files/clip_vision/CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors",
+      "directory": "clip_vision"
+    },
+    {
+      "name": "ip-adapter-plus_sdxl_vit-h.safetensors",
+      "url": "https://huggingface.co/h94/IP-Adapter/resolve/main/sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors",
+      "directory": "ipadapter"
+    }
+  ],
+  "version": 0.4
+}
