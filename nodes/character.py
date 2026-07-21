@@ -99,6 +99,8 @@ class CharacterEncode:
             "optional": {
                 "mask": ("MASK",),
                 "clip_vision": ("CLIP_VISION",),
+                "caption": ("STRING", {"default": "", "multiline": True}),
+                "prompt_template": ("STRING", {"default": "", "multiline": True}),
             },
         }
 
@@ -107,7 +109,16 @@ class CharacterEncode:
     FUNCTION = "encode"
     CATEGORY = "CharacterPose/Character"
 
-    def encode(self, image, name="hero", palette_colors=8, mask=None, clip_vision=None):
+    def encode(
+        self,
+        image,
+        name="hero",
+        palette_colors=8,
+        mask=None,
+        clip_vision=None,
+        caption="",
+        prompt_template="",
+    ):
         rgb = tensor_to_np(image)
         if mask is not None:
             m = mask[0].detach().cpu().numpy()
@@ -123,12 +134,18 @@ class CharacterEncode:
         palette = extract_palette(rgb, n_colors=int(palette_colors))
         embedding = _encode_clip_vision(clip_vision, image)
 
+        meta = {"palette_colors": int(palette_colors)}
+        if (caption or "").strip():
+            meta["caption"] = caption.strip()
+        if (prompt_template or "").strip():
+            meta["prompt_template"] = prompt_template.strip()
+
         character = make_character(
             name=name or "hero",
             reference_image=ref,
             palette=palette,
             embedding=embedding,
-            metadata={"palette_colors": int(palette_colors)},
+            metadata=meta,
         )
         return (character,)
 

@@ -1,16 +1,18 @@
 # ComfyUI CharacterPose
 
-Custom nodes for **identity-preserving 2D character pose transfer**: take a single sprite and generate the same character in new RPG poses (walk, run, idle, jump, fight, work) while keeping art style and appearance.
+Custom nodes for **identity-preserving 2D character pose transfer**: take a single sprite and generate the same character in new RPG poses while keeping art style and appearance.
 
-> **Recommended path:** generative edit with **Flux.2 Klein** (dual reference: sprite + OpenPose guide).  
-> Geometric warp (TPS / piecewise) is included for experiments but **melts cartoon sprites** — do not use it as the main pipeline.
+> **Fast path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + 3D camera/props guide).  
+> **Hard pose lock:** **Qwen-Image-Edit** + ControlNet Union (`workflows/pose_transfer_qwen_controlnet.json`).  
+> Geometric warp (TPS / piecewise) melts cartoon sprites — do not use it as the main pipeline.
 
 ## Features
 
-- Built-in **pose library** for isometric-style sheets: **South-East (`_se`)** and **North-East (`_ne`)**
-  - Actions: `idle`, `walk` (4 frames), `run` (4), `jump`, `fight` (2), `work` (2)
-- Nodes to extract DWPose → `.pose`, align target skeletons onto the detected body, and feed Flux / SDXL workflows
-- Optional character pack (`.char`) + SDXL repair path (IP-Adapter / ControlNet) for older experiments
+- **`CP_PoseTransferPrep`** — one node: auto caption, 3D pose, camera, props → guide + edit prompt
+- **`CP_PoseComposer3D`** — kinematic skeleton with **8 camera presets** (S/SE/E/NE/N/NW/W/SW) + yaw/pitch/roll
+- **Props / mounts** on the guide (not in COCO-18): `sword`, `shield`, `staff`, `bow`, `horse`
+- **`CP_CharacterCaption`** — Florence-2 img2txt (heuristic fallback) + cached caption in `.char`
+- Legacy `.pose` library (SE/NE procedural) still available via `CP_PoseLibraryLoad`
 - Example workflows under `workflows/`
 
 ## Install
@@ -34,9 +36,11 @@ pip install -r ComfyUI_CharacterPose/requirements.txt
 
 | Pack | Needed for |
 |------|------------|
-| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | `DWPreprocessor` → pose extract |
-| ComfyUI core Flux.2 / Klein nodes | Recommended Flux workflow (built-in on recent ComfyUI) |
+| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | Optional DWPose extract / align |
+| ComfyUI core Flux.2 / Klein nodes | Fast Flux workflow |
+| ComfyUI Qwen-Image-Edit nodes | Hard-lock Qwen workflow |
 | [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | Optional SDXL `CharacterRepair` path |
+| `transformers` + Florence-2 weights | Better auto-captions (`CP_CharacterCaption`) |
 
 ### DWPose ONNX
 
@@ -48,21 +52,25 @@ custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/
   dw-ll_ucoco_384.onnx
 ```
 
-The ComfyUI “Missing Models” UI may still warn about these — that warning is often a **false positive** for DWPose.
+## Which workflow?
 
-## Recommended workflow (Flux.2 Klein)
+| Goal | Workflow | Notes |
+|------|----------|--------|
+| Fast iteration (~4 steps) | `pose_transfer_flux_klein.json` | Dual reference; soft pose guidance |
+| Strict pose / multi-angle | `pose_transfer_qwen_controlnet.json` | ControlNet keypoints strength ~1.2–1.8 |
+| Legacy 2D `.pose` files | Wire `CP_PoseLibraryLoad` + `CP_WarpToPose` manually | Still supported |
+
+## Recommended workflow (Flux.2 Klein + Prep)
 
 Open: `workflows/pose_transfer_flux_klein.json`
 
 ```
 LoadImage (sprite)
-  → DWPreprocessor → CP_ExtractPose
-CP_PoseLibraryLoad (e.g. idle_se / walk_se_01 / fight_ne_02)
-  → CP_WarpToPose (method=none)  → aligned OpenPose guide
+  → CP_PoseTransferPrep (action, camera SE/…, prop)
+       → guide IMAGE + edit_prompt STRING
 Flux.2 Klein dual ReferenceLatent:
-  ref1 = sprite (identity + style)
-  ref2 = OpenPose guide (pose only)
-  prompt = keep character, follow pose, never draw bones
+  ref1 = sprite | ref2 = guide
+  prompt = edit_prompt (auto)
 → SaveImage
 ```
 
@@ -74,18 +82,45 @@ Flux.2 Klein dual ReferenceLatent:
 | `qwen_3_4b.safetensors` | `models/text_encoders/` |
 | `flux2-vae.safetensors` | `models/vae/` |
 
-Download links are embedded in the workflow (ComfyUI Missing Models / Download).
-
 **Tips**
 
 - Distilled Klein: ~4 steps, CFG `1`.
-- If **bones / skeleton** appear on the character: strengthen the prompt (“pose guide only, never draw bones / x-ray”) and change seed.
-- If pose is weak: try other frames (`walk_se_02`, `run_se_01`, …). Klein has **no OpenPose ControlNet** — pose is guided by the second reference + prompt, not locked.
-- For **hard pose lock**, consider Qwen-Image-Edit + ControlNet keypoints (separate stack).
+- If bones appear: the Prep prompt already includes anti-skeleton wording; change seed.
+- Klein has **no OpenPose ControlNet** — for a hard lock use the Qwen workflow.
 
-## Pose library
+## Hard pose lock (Qwen-Image-Edit + ControlNet)
 
-Regenerate all `.pose` files:
+Open: `workflows/pose_transfer_qwen_controlnet.json`
+
+```
+LoadImage → CP_PoseTransferPrep → guide + prompt
+Qwen-Image-Edit + ControlNet Union (InstantX) on the OpenPose guide
+→ SaveImage
+```
+
+### Models for Qwen path
+
+| File | Folder |
+|------|--------|
+| `qwen_image_edit_2511_fp8_e4m3fn.safetensors` (or 2509) | `models/diffusion_models/` |
+| `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `models/text_encoders/` |
+| `qwen_image_vae.safetensors` | `models/vae/` |
+| `Qwen-Image-InstantX-ControlNet-Union.safetensors` | `models/controlnet/` |
+
+If `TextEncodeQwenImageEdit` is missing on your ComfyUI build, use the native Qwen Edit text-encode node and convert its prompt widget to an input for the Prep `edit_prompt` STRING.
+
+Alternative: DiffSynth Union LoRA `qwen_image_union_diffsynth_lora.safetensors` (openpose mode) instead of InstantX ControlNet.
+
+## Pose Composer 3D
+
+Node: `CP_PoseComposer3D`
+
+- **Actions:** `idle`, `walk_01..04`, `run_01..04`, `jump`, `fight_01/02`, `work_01/02`, `cast`, `ride_idle`
+- **Camera presets:** `S`, `SE`, `E`, `NE`, `N`, `NW`, `W`, `SW` — or enable `use_manual_camera` for absolute yaw/pitch/roll
+- **Props:** drawn in cyan on the guide (COCO-18 body unchanged for ControlNet compatibility)
+- Outputs: `POSE`, full `guide`, `prop_mask`, `prop_hint` (for prompts)
+
+Legacy 2D library (still useful):
 
 ```bash
 python poses/_generate_poses.py
@@ -93,33 +128,22 @@ python poses/_generate_poses.py
 
 | Orientation | Meaning |
 |-------------|---------|
-| `*_se` | South-East — ¾ front-right (toward camera) |
-| `*_ne` | North-East — ¾ back-right (back more visible) |
-
-| Action | Examples |
-|--------|----------|
-| idle | `idle_se.pose`, `idle_ne.pose` |
-| walk | `walk_se_01.pose` … `walk_se_04.pose` |
-| run | `run_se_01.pose` … |
-| jump | `jump_se.pose` |
-| fight | `fight_se_01.pose`, `fight_se_02.pose` |
-| work | `work_se_01.pose`, `work_se_02.pose` |
-
-Aliases: `idle_side` → `idle_se`, `walk_side_*` → `walk_se_*`.
-
-These skeletons are **procedural**, not motion-captured. Expect to trial several frames per action.
+| `*_se` | South-East — ¾ front-right |
+| `*_ne` | North-East — ¾ back-right |
 
 ## Nodes (CharacterPose)
 
 | Node | Role |
 |------|------|
+| `CP_PoseTransferPrep` | Caption + 3D compose + align → guide + prompt |
+| `CP_PoseComposer3D` | 3D action/camera/props → POSE + guide |
+| `CP_CharacterCaption` | Florence-2 / fallback caption + edit prompt (+ `.char` cache) |
+| `CP_BuildEditPrompt` | Assemble caption + prop hints + anti-bones |
 | `CP_ExtractPose` | Image (+ DWPose keypoint) → `POSE` |
 | `CP_PoseLibraryLoad` | Load built-in / custom `.pose` |
 | `CP_ApplyPose` | Draw OpenPose skeleton image |
-| `CP_SavePose` / load helpers | Persist `.pose` |
-| `CP_WarpToPose` | Align target pose; optional geometric warp (**default off**); skeleton blend |
-| `CP_BlendSkeleton` | Overlay sticks on sprite (preview / guidance) |
-| `CP_CharacterEncode` / Save / Load | `.char` pack (reference + optional embedding) |
+| `CP_WarpToPose` | Align target pose; optional geometric warp (**default off**) |
+| `CP_CharacterEncode` / Save / Load | `.char` pack (optional caption fields) |
 | `CP_CharacterRepair` | SDXL img2img + IP-Adapter + optional ControlNet |
 | `CP_ExportSpriteSheet` / `CP_GenerateRPGSheet` | Sheet helpers |
 
@@ -127,15 +151,16 @@ These skeletons are **procedural**, not motion-captured. Expect to trial several
 
 | File | Notes |
 |------|--------|
-| `pose_transfer_flux_klein.json` | **Preferred** generative path |
-| `pose_transfer_warp.json` | Legacy SDXL warp + repair — warp melts sprites; keep `method=none` |
+| `pose_transfer_flux_klein.json` | Fast path (Prep) |
+| `pose_transfer_qwen_controlnet.json` | Hard pose lock |
+| `pose_transfer_warp.json` | Legacy SDXL — keep `method=none` |
 | `poc_pose_transfer.json` / `character_pose_nodes.json` | Earlier experiments |
 
 ## Limitations
 
-- **Same-view bias:** a side/¾ sprite does not become a true front/back view for free; generative models approximate it.
-- **No LoRA required** for the Klein path (single reference image). A character LoRA can still help style lock later if needed.
-- **Do not train a LoRA on every run** — too slow; cache per character if you add training.
+- **Same-view bias:** a side/¾ sprite does not become a true front/back view for free; generative models approximate it (Qwen-Edit 2511 helps).
+- Props are **guide strokes + prompt hints**, not a separate ControlNet channel (unless you feed `prop_mask` / canny yourself).
+- Florence-2 is optional; without it, Prep uses a palette heuristic caption.
 - Geometric warp cannot invent limbs or camera angles; it only remaps pixels.
 
 ## Dev / tests
@@ -152,4 +177,5 @@ MIT — see [LICENSE](LICENSE).
 ## Credits
 
 - Pose detection via [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) / DWPose
-- Generative edit via Black Forest Labs **FLUX.2 Klein** in ComfyUI
+- Generative edit via Black Forest Labs **FLUX.2 Klein** and **Qwen-Image-Edit** in ComfyUI
+- Captioning via Microsoft **Florence-2** (optional)

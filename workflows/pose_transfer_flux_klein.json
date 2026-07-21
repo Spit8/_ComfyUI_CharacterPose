@@ -1,17 +1,31 @@
 {
-  "last_node_id": 26,
-  "last_link_id": 34,
+  "last_node_id": 24,
+  "last_link_id": 31,
   "nodes": [
     {
       "id": 1,
       "type": "UNETLoader",
-      "pos": [40, 40],
-      "size": [360, 82],
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        360,
+        82
+      ],
       "flags": {},
       "order": 0,
       "mode": 0,
+      "inputs": [],
       "outputs": [
-        {"name": "MODEL", "type": "MODEL", "links": [1], "slot_index": 0}
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            1
+          ],
+          "slot_index": 0
+        }
       ],
       "properties": {
         "Node name for S&R": "UNETLoader",
@@ -23,18 +37,35 @@
           }
         ]
       },
-      "widgets_values": ["flux-2-klein-4b-fp8.safetensors", "default"]
+      "widgets_values": [
+        "flux-2-klein-4b-fp8.safetensors",
+        "default"
+      ]
     },
     {
       "id": 2,
       "type": "CLIPLoader",
-      "pos": [40, 160],
-      "size": [360, 106],
+      "pos": [
+        40,
+        160
+      ],
+      "size": [
+        360,
+        106
+      ],
       "flags": {},
       "order": 1,
       "mode": 0,
+      "inputs": [],
       "outputs": [
-        {"name": "CLIP", "type": "CLIP", "links": [2], "slot_index": 0}
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            2
+          ],
+          "slot_index": 0
+        }
       ],
       "properties": {
         "Node name for S&R": "CLIPLoader",
@@ -46,18 +77,38 @@
           }
         ]
       },
-      "widgets_values": ["qwen_3_4b.safetensors", "flux2", "default"]
+      "widgets_values": [
+        "qwen_3_4b.safetensors",
+        "flux2",
+        "default"
+      ]
     },
     {
       "id": 3,
       "type": "VAELoader",
-      "pos": [40, 300],
-      "size": [360, 58],
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        360,
+        58
+      ],
       "flags": {},
       "order": 2,
       "mode": 0,
+      "inputs": [],
       "outputs": [
-        {"name": "VAE", "type": "VAE", "links": [3, 4, 5], "slot_index": 0}
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            3,
+            4,
+            5
+          ],
+          "slot_index": 0
+        }
       ],
       "properties": {
         "Node name for S&R": "VAELoader",
@@ -69,462 +120,1219 @@
           }
         ]
       },
-      "widgets_values": ["flux2-vae.safetensors"]
+      "widgets_values": [
+        "flux2-vae.safetensors"
+      ]
     },
     {
       "id": 4,
       "type": "LoadImage",
-      "pos": [40, 400],
-      "size": [320, 314],
+      "pos": [
+        40,
+        400
+      ],
+      "size": [
+        320,
+        314
+      ],
       "flags": {},
       "order": 3,
       "mode": 0,
+      "inputs": [],
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [6, 7, 8, 9], "slot_index": 0},
-        {"name": "MASK", "type": "MASK", "links": null, "slot_index": 1}
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            6,
+            7
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": null,
+          "slot_index": 1
+        }
       ],
-      "title": "Sprite de référence (identité + style)",
-      "properties": {"Node name for S&R": "LoadImage"},
-      "widgets_values": ["Example_Comfy.png", "image"]
+      "title": "Sprite de reference",
+      "properties": {
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "Example_Comfy.png",
+        "image"
+      ]
     },
     {
       "id": 5,
-      "type": "DWPreprocessor",
-      "pos": [400, 400],
-      "size": [315, 200],
+      "type": "CP_PoseTransferPrep",
+      "pos": [
+        420,
+        400
+      ],
+      "size": [
+        360,
+        340
+      ],
       "flags": {},
       "order": 4,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 6}
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "source_pose",
+          "type": "POSE",
+          "link": null
+        }
       ],
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": null, "slot_index": 0},
-        {"name": "POSE_KEYPOINT", "type": "POSE_KEYPOINT", "links": [10], "slot_index": 1}
+        {
+          "name": "guide",
+          "type": "IMAGE",
+          "links": [
+            8
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "edit_prompt",
+          "type": "STRING",
+          "links": [
+            9
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "pose",
+          "type": "POSE",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "preview",
+          "type": "IMAGE",
+          "links": [
+            10
+          ],
+          "slot_index": 3
+        },
+        {
+          "name": "caption",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 4
+        }
       ],
-      "properties": {"Node name for S&R": "DWPreprocessor"},
-      "widgets_values": ["enable", "enable", "enable", 1024, "yolox_l.onnx", "dw-ll_ucoco_384.onnx", "disable"]
+      "title": "Prep: caption + pose 3D + props",
+      "properties": {
+        "Node name for S&R": "CP_PoseTransferPrep"
+      },
+      "widgets_values": [
+        "walk_01",
+        "SE",
+        "none",
+        true,
+        true,
+        "none",
+        0.0,
+        0.0,
+        0.0,
+        false,
+        "",
+        "",
+        0,
+        0
+      ]
     },
     {
       "id": 6,
-      "type": "CP_ExtractPose",
-      "pos": [750, 400],
-      "size": [280, 100],
+      "type": "PreviewImage",
+      "pos": [
+        420,
+        780
+      ],
+      "size": [
+        280,
+        260
+      ],
       "flags": {},
       "order": 5,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 7},
-        {"name": "pose_keypoint", "type": "POSE_KEYPOINT", "link": 10}
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 10
+        }
       ],
-      "outputs": [
-        {"name": "pose", "type": "POSE", "links": [11], "slot_index": 0},
-        {"name": "skeleton_preview", "type": "IMAGE", "links": null, "slot_index": 1}
-      ],
-      "properties": {"Node name for S&R": "CP_ExtractPose"},
-      "widgets_values": ["source"]
+      "outputs": [],
+      "title": "Preview pose overlay",
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
     },
     {
       "id": 7,
-      "type": "CP_PoseLibraryLoad",
-      "pos": [400, 640],
-      "size": [300, 120],
+      "type": "CLIPTextEncode",
+      "pos": [
+        840,
+        40
+      ],
+      "size": [
+        520,
+        160
+      ],
       "flags": {},
       "order": 6,
       "mode": 0,
-      "outputs": [
-        {"name": "pose", "type": "POSE", "links": [12], "slot_index": 0}
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 2
+        },
+        {
+          "name": "text",
+          "type": "STRING",
+          "link": 9,
+          "widget": {
+            "name": "text"
+          }
+        }
       ],
-      "properties": {"Node name for S&R": "CP_PoseLibraryLoad"},
-      "widgets_values": ["idle_se.pose", 1024, 1024]
+      "outputs": [
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            11,
+            12
+          ],
+          "slot_index": 0
+        }
+      ],
+      "title": "Prompt auto (depuis Prep)",
+      "properties": {
+        "Node name for S&R": "CLIPTextEncode"
+      },
+      "widgets_values": [
+        ""
+      ]
     },
     {
       "id": 8,
-      "type": "CP_WarpToPose",
-      "pos": [1060, 400],
-      "size": [300, 200],
+      "type": "ConditioningZeroOut",
+      "pos": [
+        1400,
+        40
+      ],
+      "size": [
+        240,
+        46
+      ],
       "flags": {},
       "order": 7,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 8},
-        {"name": "source_pose", "type": "POSE", "link": 11},
-        {"name": "target_pose", "type": "POSE", "link": 12}
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 12
+        }
       ],
       "outputs": [
-        {"name": "guided", "type": "IMAGE", "links": null, "slot_index": 0},
-        {"name": "skeleton", "type": "IMAGE", "links": [13], "slot_index": 1},
-        {"name": "image_clean", "type": "IMAGE", "links": null, "slot_index": 2},
-        {"name": "aligned_target_pose", "type": "POSE", "links": null, "slot_index": 3}
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            13
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Squelette cible aligné (réf 2)",
-      "properties": {"Node name for S&R": "CP_WarpToPose"},
-      "widgets_values": ["none", 4.0, 0.0, 0.20, "true", "false", 0.0, "overlay", 2]
+      "properties": {
+        "Node name for S&R": "ConditioningZeroOut"
+      },
+      "widgets_values": []
     },
     {
       "id": 9,
-      "type": "CLIPTextEncode",
-      "pos": [400, 40],
-      "size": [560, 200],
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        840,
+        280
+      ],
+      "size": [
+        300,
+        106
+      ],
       "flags": {},
       "order": 8,
       "mode": 0,
       "inputs": [
-        {"name": "clip", "type": "CLIP", "link": 2}
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 7
+        }
       ],
       "outputs": [
-        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [14, 15], "slot_index": 0}
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            14,
+            15
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Prompt (identité + suivre le squelette)",
-      "properties": {"Node name for S&R": "CLIPTextEncode"},
-      "widgets_values": ["Full-body 2D game character sprite. Redraw the exact same character from image 1 (same face, beard, red tunic with gold trim, tan sleeves, brown boots, cartoon line art, colors). Change ONLY the body pose to match the stick-figure pose guide in image 2. CRITICAL: image 2 is an abstract pose guide only — NEVER draw bones, skeleton, x-ray, anatomical limbs, white bone overlays, or OpenPose sticks on the character. Solid clothed opaque skin and clothing only. Single character, clean vector art, plain white background, no extra limbs, no duplicate heads."]
+      "title": "Scale ref 1 (sprite)",
+      "properties": {
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "lanczos",
+        1.0,
+        64
+      ]
     },
     {
       "id": 10,
-      "type": "ConditioningZeroOut",
-      "pos": [980, 40],
-      "size": [240, 46],
+      "type": "GetImageSize",
+      "pos": [
+        1180,
+        280
+      ],
+      "size": [
+        210,
+        66
+      ],
       "flags": {},
       "order": 9,
       "mode": 0,
       "inputs": [
-        {"name": "conditioning", "type": "CONDITIONING", "link": 15}
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 14
+        }
       ],
       "outputs": [
-        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [16], "slot_index": 0}
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            16,
+            17
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            18,
+            19
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "links": null,
+          "slot_index": 2
+        }
       ],
-      "properties": {"Node name for S&R": "ConditioningZeroOut"},
+      "properties": {
+        "Node name for S&R": "GetImageSize"
+      },
       "widgets_values": []
     },
     {
       "id": 11,
-      "type": "ImageScaleToTotalPixels",
-      "pos": [400, 780],
-      "size": [300, 106],
+      "type": "VAEEncode",
+      "pos": [
+        1180,
+        380
+      ],
+      "size": [
+        210,
+        46
+      ],
       "flags": {},
       "order": 10,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 9}
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 15
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 3
+        }
       ],
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [17, 18], "slot_index": 0}
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            20
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Scale réf 1 (sprite)",
-      "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
-      "widgets_values": ["lanczos", 1.0, 64]
+      "title": "Encode ref 1",
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
+      "widgets_values": []
     },
     {
       "id": 12,
-      "type": "GetImageSize",
-      "pos": [720, 780],
-      "size": [210, 66],
+      "type": "ReferenceLatent",
+      "pos": [
+        1400,
+        140
+      ],
+      "size": [
+        260,
+        46
+      ],
       "flags": {},
       "order": 11,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 17}
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 11
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 20
+        }
       ],
       "outputs": [
-        {"name": "width", "type": "INT", "links": [24, 25], "slot_index": 0},
-        {"name": "height", "type": "INT", "links": [26, 27], "slot_index": 1},
-        {"name": "batch_size", "type": "INT", "links": null, "slot_index": 2}
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            21
+          ],
+          "slot_index": 0
+        }
       ],
-      "properties": {"Node name for S&R": "GetImageSize"},
+      "title": "Ref latent 1 (sprite)",
+      "properties": {
+        "Node name for S&R": "ReferenceLatent"
+      },
       "widgets_values": []
     },
     {
       "id": 13,
-      "type": "VAEEncode",
-      "pos": [720, 880],
-      "size": [200, 46],
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        840,
+        520
+      ],
+      "size": [
+        300,
+        106
+      ],
       "flags": {},
       "order": 12,
       "mode": 0,
       "inputs": [
-        {"name": "pixels", "type": "IMAGE", "link": 18},
-        {"name": "vae", "type": "VAE", "link": 3}
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 8
+        }
       ],
       "outputs": [
-        {"name": "LATENT", "type": "LATENT", "links": [19], "slot_index": 0}
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            22
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Encode réf 1",
-      "properties": {"Node name for S&R": "VAEEncode"},
-      "widgets_values": []
+      "title": "Scale ref 2 (guide pose)",
+      "properties": {
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "lanczos",
+        1.0,
+        64
+      ]
     },
     {
       "id": 14,
-      "type": "ReferenceLatent",
-      "pos": [980, 140],
-      "size": [260, 46],
+      "type": "VAEEncode",
+      "pos": [
+        1180,
+        520
+      ],
+      "size": [
+        210,
+        46
+      ],
       "flags": {},
       "order": 13,
       "mode": 0,
       "inputs": [
-        {"name": "conditioning", "type": "CONDITIONING", "link": 14},
-        {"name": "latent", "type": "LATENT", "link": 19}
+        {
+          "name": "pixels",
+          "type": "IMAGE",
+          "link": 22
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 4
+        }
       ],
       "outputs": [
-        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [20], "slot_index": 0}
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            23
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Réf latent 1 (sprite)",
-      "properties": {"Node name for S&R": "ReferenceLatent"},
+      "title": "Encode ref 2",
+      "properties": {
+        "Node name for S&R": "VAEEncode"
+      },
       "widgets_values": []
     },
     {
       "id": 15,
-      "type": "ImageScaleToTotalPixels",
-      "pos": [1400, 400],
-      "size": [300, 106],
+      "type": "ReferenceLatent",
+      "pos": [
+        1700,
+        140
+      ],
+      "size": [
+        260,
+        46
+      ],
       "flags": {},
       "order": 14,
       "mode": 0,
       "inputs": [
-        {"name": "image", "type": "IMAGE", "link": 13}
+        {
+          "name": "conditioning",
+          "type": "CONDITIONING",
+          "link": 21
+        },
+        {
+          "name": "latent",
+          "type": "LATENT",
+          "link": 23
+        }
       ],
       "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [21], "slot_index": 0}
+        {
+          "name": "CONDITIONING",
+          "type": "CONDITIONING",
+          "links": [
+            24
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Scale réf 2 (squelette)",
-      "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
-      "widgets_values": ["lanczos", 1.0, 64]
+      "title": "Ref latent 2 (guide)",
+      "properties": {
+        "Node name for S&R": "ReferenceLatent"
+      },
+      "widgets_values": []
     },
     {
       "id": 16,
-      "type": "VAEEncode",
-      "pos": [1400, 540],
-      "size": [200, 46],
+      "type": "EmptyFlux2LatentImage",
+      "pos": [
+        1700,
+        280
+      ],
+      "size": [
+        270,
+        106
+      ],
       "flags": {},
       "order": 15,
       "mode": 0,
       "inputs": [
-        {"name": "pixels", "type": "IMAGE", "link": 21},
-        {"name": "vae", "type": "VAE", "link": 4}
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 17,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 19,
+          "widget": {
+            "name": "height"
+          }
+        }
       ],
       "outputs": [
-        {"name": "LATENT", "type": "LATENT", "links": [22], "slot_index": 0}
+        {
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            25
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Encode réf 2",
-      "properties": {"Node name for S&R": "VAEEncode"},
-      "widgets_values": []
+      "properties": {
+        "Node name for S&R": "EmptyFlux2LatentImage"
+      },
+      "widgets_values": [
+        1024,
+        1024,
+        1
+      ]
     },
     {
       "id": 17,
-      "type": "ReferenceLatent",
-      "pos": [1280, 140],
-      "size": [260, 46],
+      "type": "Flux2Scheduler",
+      "pos": [
+        1700,
+        420
+      ],
+      "size": [
+        270,
+        106
+      ],
       "flags": {},
       "order": 16,
       "mode": 0,
       "inputs": [
-        {"name": "conditioning", "type": "CONDITIONING", "link": 20},
-        {"name": "latent", "type": "LATENT", "link": 22}
+        {
+          "name": "width",
+          "type": "INT",
+          "link": 16,
+          "widget": {
+            "name": "width"
+          }
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "link": 18,
+          "widget": {
+            "name": "height"
+          }
+        }
       ],
       "outputs": [
-        {"name": "CONDITIONING", "type": "CONDITIONING", "links": [23], "slot_index": 0}
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            26
+          ],
+          "slot_index": 0
+        }
       ],
-      "title": "Réf latent 2 (squelette)",
-      "properties": {"Node name for S&R": "ReferenceLatent"},
-      "widgets_values": []
+      "properties": {
+        "Node name for S&R": "Flux2Scheduler"
+      },
+      "widgets_values": [
+        4,
+        1024,
+        1024
+      ]
     },
     {
       "id": 18,
-      "type": "EmptyFlux2LatentImage",
-      "pos": [1600, 640],
-      "size": [270, 106],
+      "type": "CFGGuider",
+      "pos": [
+        2000,
+        40
+      ],
+      "size": [
+        270,
+        98
+      ],
       "flags": {},
       "order": 17,
       "mode": 0,
       "inputs": [
-        {"name": "width", "type": "INT", "link": 25},
-        {"name": "height", "type": "INT", "link": 27}
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 1
+        },
+        {
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 24
+        },
+        {
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 13
+        }
       ],
       "outputs": [
-        {"name": "LATENT", "type": "LATENT", "links": [32], "slot_index": 0}
+        {
+          "name": "GUIDER",
+          "type": "GUIDER",
+          "links": [
+            27
+          ],
+          "slot_index": 0
+        }
       ],
-      "properties": {"Node name for S&R": "EmptyFlux2LatentImage"},
-      "widgets_values": [1024, 1024, 1]
+      "properties": {
+        "Node name for S&R": "CFGGuider"
+      },
+      "widgets_values": [
+        1.0
+      ]
     },
     {
       "id": 19,
-      "type": "Flux2Scheduler",
-      "pos": [1600, 780],
-      "size": [270, 106],
+      "type": "KSamplerSelect",
+      "pos": [
+        2000,
+        180
+      ],
+      "size": [
+        270,
+        58
+      ],
       "flags": {},
       "order": 18,
       "mode": 0,
-      "inputs": [
-        {"name": "width", "type": "INT", "link": 24},
-        {"name": "height", "type": "INT", "link": 26}
-      ],
+      "inputs": [],
       "outputs": [
-        {"name": "SIGMAS", "type": "SIGMAS", "links": [31], "slot_index": 0}
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            28
+          ],
+          "slot_index": 0
+        }
       ],
-      "properties": {"Node name for S&R": "Flux2Scheduler"},
-      "widgets_values": [4, 1024, 1024]
+      "properties": {
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "euler"
+      ]
     },
     {
       "id": 20,
-      "type": "CFGGuider",
-      "pos": [1560, 140],
-      "size": [270, 98],
+      "type": "RandomNoise",
+      "pos": [
+        2000,
+        280
+      ],
+      "size": [
+        270,
+        82
+      ],
       "flags": {},
       "order": 19,
       "mode": 0,
-      "inputs": [
-        {"name": "model", "type": "MODEL", "link": 1},
-        {"name": "positive", "type": "CONDITIONING", "link": 23},
-        {"name": "negative", "type": "CONDITIONING", "link": 16}
-      ],
+      "inputs": [],
       "outputs": [
-        {"name": "GUIDER", "type": "GUIDER", "links": [29], "slot_index": 0}
+        {
+          "name": "NOISE",
+          "type": "NOISE",
+          "links": [
+            29
+          ],
+          "slot_index": 0
+        }
       ],
-      "properties": {"Node name for S&R": "CFGGuider"},
-      "widgets_values": [1.0]
+      "properties": {
+        "Node name for S&R": "RandomNoise"
+      },
+      "widgets_values": [
+        42,
+        "randomize"
+      ]
     },
     {
       "id": 21,
-      "type": "KSamplerSelect",
-      "pos": [1560, 280],
-      "size": [270, 58],
+      "type": "SamplerCustomAdvanced",
+      "pos": [
+        2320,
+        120
+      ],
+      "size": [
+        280,
+        106
+      ],
       "flags": {},
       "order": 20,
       "mode": 0,
-      "outputs": [
-        {"name": "SAMPLER", "type": "SAMPLER", "links": [30], "slot_index": 0}
+      "inputs": [
+        {
+          "name": "noise",
+          "type": "NOISE",
+          "link": 29
+        },
+        {
+          "name": "guider",
+          "type": "GUIDER",
+          "link": 27
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 28
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 26
+        },
+        {
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 25
+        }
       ],
-      "properties": {"Node name for S&R": "KSamplerSelect"},
-      "widgets_values": ["euler"]
+      "outputs": [
+        {
+          "name": "output",
+          "type": "LATENT",
+          "links": [
+            30
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "denoised_output",
+          "type": "LATENT",
+          "links": null,
+          "slot_index": 1
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "SamplerCustomAdvanced"
+      },
+      "widgets_values": []
     },
     {
       "id": 22,
-      "type": "RandomNoise",
-      "pos": [1560, 380],
-      "size": [270, 82],
+      "type": "VAEDecode",
+      "pos": [
+        2640,
+        120
+      ],
+      "size": [
+        220,
+        46
+      ],
       "flags": {},
       "order": 21,
       "mode": 0,
-      "outputs": [
-        {"name": "NOISE", "type": "NOISE", "links": [28], "slot_index": 0}
+      "inputs": [
+        {
+          "name": "samples",
+          "type": "LATENT",
+          "link": 30
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 5
+        }
       ],
-      "properties": {"Node name for S&R": "RandomNoise"},
-      "widgets_values": [42, "randomize"]
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            31
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VAEDecode"
+      },
+      "widgets_values": []
     },
     {
       "id": 23,
-      "type": "SamplerCustomAdvanced",
-      "pos": [1900, 200],
-      "size": [280, 106],
+      "type": "SaveImage",
+      "pos": [
+        2640,
+        220
+      ],
+      "size": [
+        360,
+        400
+      ],
       "flags": {},
       "order": 22,
       "mode": 0,
       "inputs": [
-        {"name": "noise", "type": "NOISE", "link": 28},
-        {"name": "guider", "type": "GUIDER", "link": 29},
-        {"name": "sampler", "type": "SAMPLER", "link": 30},
-        {"name": "sigmas", "type": "SIGMAS", "link": 31},
-        {"name": "latent_image", "type": "LATENT", "link": 32}
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 31
+        }
       ],
-      "outputs": [
-        {"name": "output", "type": "LATENT", "links": [33], "slot_index": 0},
-        {"name": "denoised_output", "type": "LATENT", "links": null, "slot_index": 1}
-      ],
-      "properties": {"Node name for S&R": "SamplerCustomAdvanced"},
-      "widgets_values": []
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": [
+        "pose_transfer_flux_klein"
+      ]
     },
     {
       "id": 24,
-      "type": "VAEDecode",
-      "pos": [2200, 200],
-      "size": [220, 46],
+      "type": "Note",
+      "pos": [
+        40,
+        760
+      ],
+      "size": [
+        340,
+        280
+      ],
       "flags": {},
       "order": 23,
       "mode": 0,
-      "inputs": [
-        {"name": "samples", "type": "LATENT", "link": 33},
-        {"name": "vae", "type": "VAE", "link": 5}
-      ],
-      "outputs": [
-        {"name": "IMAGE", "type": "IMAGE", "links": [34], "slot_index": 0}
-      ],
-      "properties": {"Node name for S&R": "VAEDecode"},
-      "widgets_values": []
-    },
-    {
-      "id": 25,
-      "type": "SaveImage",
-      "pos": [2200, 300],
-      "size": [360, 400],
-      "flags": {},
-      "order": 24,
-      "mode": 0,
-      "inputs": [
-        {"name": "images", "type": "IMAGE", "link": 34}
-      ],
-      "properties": {"Node name for S&R": "SaveImage"},
-      "widgets_values": ["pose_transfer_flux_klein"]
-    },
-    {
-      "id": 26,
-      "type": "Note",
-      "pos": [40, 760],
-      "size": [330, 320],
-      "flags": {},
-      "order": 25,
-      "mode": 0,
-      "properties": {"text": ""},
+      "inputs": [],
+      "outputs": [],
+      "properties": {
+        "text": ""
+      },
       "widgets_values": [
-        "CharacterPose — Flux.2 Klein pose transfer\n\nréf 1 = sprite | réf 2 = OpenPose guide (aligné) | prompt = garder perso + suivre pose.\nLe prompt interdit explicitement os/squelette/x-ray (Klein peut les peindre sinon).\n\nLibrairie poses (CP_PoseLibraryLoad):\n  Orientations: *_se (South-East 3/4 face) | *_ne (North-East 3/4 dos)\n  Actions: idle_*, walk_*_01..04, run_*_01..04, jump_*, fight_*_01/02, work_*_01/02\n  Alias: idle_side = idle_se, walk_side_* = walk_se_*\n\nSi os apparaissent encore: change seed, ou baisse l'influence en mettant\nskeleton_blend=0 et un prompt encore plus strict.\nSi pose mal suivie: essaie plusieurs frames walk/run, ou Qwen-Edit+ControlNet."
+        "CharacterPose \u2014 Flux.2 Klein (Prep)\n\nLoadImage \u2192 CP_PoseTransferPrep \u2192 guide + edit_prompt\nref1 = sprite | ref2 = OpenPose guide\nPrompt auto branche sur CLIPTextEncode.\n\nHard lock: pose_transfer_qwen_controlnet.json"
       ]
     }
   ],
   "links": [
-    [1, 1, 0, 20, 0, "MODEL"],
-    [2, 2, 0, 9, 0, "CLIP"],
-    [3, 3, 0, 13, 1, "VAE"],
-    [4, 3, 0, 16, 1, "VAE"],
-    [5, 3, 0, 24, 1, "VAE"],
-    [6, 4, 0, 5, 0, "IMAGE"],
-    [7, 4, 0, 6, 0, "IMAGE"],
-    [8, 4, 0, 8, 0, "IMAGE"],
-    [9, 4, 0, 11, 0, "IMAGE"],
-    [10, 5, 1, 6, 1, "POSE_KEYPOINT"],
-    [11, 6, 0, 8, 1, "POSE"],
-    [12, 7, 0, 8, 2, "POSE"],
-    [13, 8, 1, 15, 0, "IMAGE"],
-    [14, 9, 0, 14, 0, "CONDITIONING"],
-    [15, 9, 0, 10, 0, "CONDITIONING"],
-    [16, 10, 0, 20, 2, "CONDITIONING"],
-    [17, 11, 0, 12, 0, "IMAGE"],
-    [18, 11, 0, 13, 0, "IMAGE"],
-    [19, 13, 0, 14, 1, "LATENT"],
-    [20, 14, 0, 17, 0, "CONDITIONING"],
-    [21, 15, 0, 16, 0, "IMAGE"],
-    [22, 16, 0, 17, 1, "LATENT"],
-    [23, 17, 0, 20, 1, "CONDITIONING"],
-    [24, 12, 0, 19, 0, "INT"],
-    [25, 12, 0, 18, 0, "INT"],
-    [26, 12, 1, 19, 1, "INT"],
-    [27, 12, 1, 18, 1, "INT"],
-    [28, 22, 0, 23, 0, "NOISE"],
-    [29, 20, 0, 23, 1, "GUIDER"],
-    [30, 21, 0, 23, 2, "SAMPLER"],
-    [31, 19, 0, 23, 3, "SIGMAS"],
-    [32, 18, 0, 23, 4, "LATENT"],
-    [33, 23, 0, 24, 0, "LATENT"],
-    [34, 24, 0, 25, 0, "IMAGE"]
+    [
+      1,
+      1,
+      0,
+      18,
+      0,
+      "MODEL"
+    ],
+    [
+      2,
+      2,
+      0,
+      7,
+      0,
+      "CLIP"
+    ],
+    [
+      3,
+      3,
+      0,
+      11,
+      1,
+      "VAE"
+    ],
+    [
+      4,
+      3,
+      0,
+      14,
+      1,
+      "VAE"
+    ],
+    [
+      5,
+      3,
+      0,
+      22,
+      1,
+      "VAE"
+    ],
+    [
+      6,
+      4,
+      0,
+      5,
+      0,
+      "IMAGE"
+    ],
+    [
+      7,
+      4,
+      0,
+      9,
+      0,
+      "IMAGE"
+    ],
+    [
+      8,
+      5,
+      0,
+      13,
+      0,
+      "IMAGE"
+    ],
+    [
+      9,
+      5,
+      1,
+      7,
+      1,
+      "STRING"
+    ],
+    [
+      10,
+      5,
+      3,
+      6,
+      0,
+      "IMAGE"
+    ],
+    [
+      11,
+      7,
+      0,
+      12,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      12,
+      7,
+      0,
+      8,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      13,
+      8,
+      0,
+      18,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      14,
+      9,
+      0,
+      10,
+      0,
+      "IMAGE"
+    ],
+    [
+      15,
+      9,
+      0,
+      11,
+      0,
+      "IMAGE"
+    ],
+    [
+      16,
+      10,
+      0,
+      17,
+      0,
+      "INT"
+    ],
+    [
+      17,
+      10,
+      0,
+      16,
+      0,
+      "INT"
+    ],
+    [
+      18,
+      10,
+      1,
+      17,
+      1,
+      "INT"
+    ],
+    [
+      19,
+      10,
+      1,
+      16,
+      1,
+      "INT"
+    ],
+    [
+      20,
+      11,
+      0,
+      12,
+      1,
+      "LATENT"
+    ],
+    [
+      21,
+      12,
+      0,
+      15,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      22,
+      13,
+      0,
+      14,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      14,
+      0,
+      15,
+      1,
+      "LATENT"
+    ],
+    [
+      24,
+      15,
+      0,
+      18,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      25,
+      16,
+      0,
+      21,
+      4,
+      "LATENT"
+    ],
+    [
+      26,
+      17,
+      0,
+      21,
+      3,
+      "SIGMAS"
+    ],
+    [
+      27,
+      18,
+      0,
+      21,
+      1,
+      "GUIDER"
+    ],
+    [
+      28,
+      19,
+      0,
+      21,
+      2,
+      "SAMPLER"
+    ],
+    [
+      29,
+      20,
+      0,
+      21,
+      0,
+      "NOISE"
+    ],
+    [
+      30,
+      21,
+      0,
+      22,
+      0,
+      "LATENT"
+    ],
+    [
+      31,
+      22,
+      0,
+      23,
+      0,
+      "IMAGE"
+    ]
   ],
   "groups": [
-    {"id": 1, "title": "Modèles Flux.2 Klein", "bounding": [20, 0, 400, 380], "color": "#3f789e", "font_size": 24, "flags": {}},
-    {"id": 2, "title": "Pose cible (réf 2)", "bounding": [390, 340, 990, 560], "color": "#88A", "font_size": 24, "flags": {}},
-    {"id": 3, "title": "Sampler Flux.2", "bounding": [1540, 100, 700, 380], "color": "#3f789e", "font_size": 24, "flags": {}}
+    {
+      "id": 1,
+      "title": "Modeles Flux.2 Klein",
+      "bounding": [
+        20,
+        0,
+        400,
+        380
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "CharacterPose Prep",
+      "bounding": [
+        400,
+        360,
+        420,
+        700
+      ],
+      "color": "#88A",
+      "font_size": 24,
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Sampler Flux.2",
+      "bounding": [
+        1660,
+        0,
+        1380,
+        520
+      ],
+      "color": "#3f789e",
+      "font_size": 24,
+      "flags": {}
+    }
   ],
   "config": {},
   "extra": {
     "info": {
-      "name": "CharacterPose — Flux.2 Klein Pose Transfer",
-      "version": "0.4.0",
-      "description": "Generative pose transfer with Flux.2 Klein 4B: sprite + target OpenPose skeleton as dual references, identity/style preserved via prompt. No geometric warp."
+      "name": "CharacterPose \u2014 Flux.2 Klein Pose Transfer (Prep)",
+      "version": "0.5.1",
+      "description": "Fully wired: Prep \u2192 dual ReferenceLatent Flux Klein."
     }
   },
   "models": [
