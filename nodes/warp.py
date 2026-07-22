@@ -65,6 +65,122 @@ def _torso_length(pose: dict) -> float | None:
     return float(np.linalg.norm(neck - hip))
 
 
+def _pose_bbox(pose: dict) -> tuple[np.ndarray, np.ndarray] | None:
+    """Return (min_xy, max_xy) over visible keypoints, or None."""
+    pts = []
+    for x, y, c in pose.get("keypoints") or []:
+        if c > 0:
+            pts.append([x, y])
+    if len(pts) < 2:
+        return None
+    arr = np.asarray(pts, dtype=np.float64)
+    return arr.min(axis=0), arr.max(axis=0)
+
+
+def _pose_height(pose: dict) -> float | None:
+    """Full-body height: prefer head→ankle span, else bbox height."""
+    nose = _kp(pose, 0)
+    r_ank = _kp(pose, 10)
+    l_ank = _kp(pose, 13)
+    ankles = [p for p in (r_ank, l_ank) if p is not None]
+    if nose is not None and ankles:
+        ank = sum(ankles) / len(ankles)
+        h = float(abs(ank[1] - nose[1]))
+        if h > 1.0:
+            return h
+    box = _pose_bbox(pose)
+    if box is None:
+        return None
+    mn, mx = box
+    h = float(mx[1] - mn[1])
+    return h if h > 1.0 else None
+
+
+def _pose_center(pose: dict) -> np.ndarray | None:
+    hip = _midhip(pose)
+    if hip is not None:
+        return hip
+    box = _pose_bbox(pose)
+    if box is None:
+        return None
+    mn, mx = box
+    return (mn + mx) * 0.5
+
+
+def fit_pose_to_source(
+    target: dict,
+    source: dict | None = None,
+    *,
+    content_box: tuple[int, int, int, int] | None = None,
+    height_fill: float = 0.90,
+    scale_min: float = 0.25,
+    scale_max: float = 3.5,
+) -> dict:
+    """Uniform scale + translate so target matches source character size.
+
+    Prefers full-body height (bbox / head→ankle) over torso-only. If ``source``
+    is missing, fits into ``content_box`` (sprite content bbox) at ~height_fill.
+    """
+    out = copy.deepcopy(target)
+    tgt_h = _pose_height(target)
+    tgt_c = _pose_center(target)
+    if tgt_h is None or tgt_c is None or tgt_h < 1e-3:
+        return out
+
+    src_h = None
+    src_c = None
+    if source is not None:
+        src_h = _pose_height(source)
+        src_c = _pose_center(source)
+
+    if (src_h is None or src_c is None) and content_box is not None:
+        x0, y0, x1, y1 = content_box
+        src_h = max(1.0, float(y1 - y0) * float(height_fill))
+        src_c = np.array([(x0 + x1) * 0.5, (y0 + y1) * 0.5], dtype=np.float64)
+
+    if src_h is None or src_c is None:
+        # Last resort: old torso align if we have a source pose
+        if source is not None:
+            return align_pose_to_source(target, source)
+        return out
+
+    # Blend full-body scale with torso/shoulder when available
+    scale = float(src_h / tgt_h)
+    if source is not None:
+        src_len = _torso_length(source)
+        tgt_len = _torso_length(target)
+        scales = [scale]
+        if src_len is not None and tgt_len is not None and tgt_len > 1e-3:
+            scales.append(float(src_len / tgt_len))
+        src_rs, src_ls = _kp(source, _R_SHOULDER), _kp(source, _L_SHOULDER)
+        tgt_rs, tgt_ls = _kp(target, _R_SHOULDER), _kp(target, _L_SHOULDER)
+        if all(p is not None for p in (src_rs, src_ls, tgt_rs, tgt_ls)):
+            src_sw = float(np.linalg.norm(src_rs - src_ls))
+            tgt_sw = float(np.linalg.norm(tgt_rs - tgt_ls))
+            if tgt_sw > 1e-3 and src_sw > 1e-3:
+                scales.append(float(src_sw / tgt_sw))
+        # Weight full-body higher so overall size matches the sprite
+        if len(scales) == 1:
+            scale = scales[0]
+        else:
+            scale = 0.75 * scales[0] + 0.25 * float(np.mean(scales[1:]))
+
+    scale = float(np.clip(scale, scale_min, scale_max))
+
+    new_kps = []
+    for x, y, c in target["keypoints"]:
+        if c <= 0:
+            new_kps.append([0.0, 0.0, 0.0])
+            continue
+        p = (np.array([x, y], dtype=np.float64) - tgt_c) * scale + src_c
+        new_kps.append([float(p[0]), float(p[1]), float(c)])
+    out["keypoints"] = new_kps
+    if source is not None:
+        out["width"] = source.get("width", out.get("width"))
+        out["height"] = source.get("height", out.get("height"))
+    return out
+
+
 def align_pose_to_source(target: dict, source: dict) -> dict:
     """Rigid-align target pose onto source (uniform scale + translate)."""
     out = copy.deepcopy(target)

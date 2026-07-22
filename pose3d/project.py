@@ -66,13 +66,22 @@ def compose_pose(
     height: int = 1024,
     props: list[str] | str | None = None,
     angle_overlay: dict[str, tuple[float, float, float]] | None = None,
+    joint_angles: dict[str, tuple[float, float, float]] | None = None,
 ) -> dict[str, Any]:
     """Build POSE + projected prop polylines + metadata.
 
+    If ``joint_angles`` is provided, it is used as the full FK angle dict
+    (``action`` is kept only for metadata / naming). Otherwise loads the
+    named action preset, then applies optional additive ``angle_overlay``.
+
     Returns dict with keys: pose, prop_polylines_2d (list of Nx2), prop_hint, camera, action.
     """
-    angles = get_action_angles(action)
-    angles = merge_angles(angles, angle_overlay)
+    if joint_angles is not None:
+        angles = dict(joint_angles)
+        angles = merge_angles(angles, angle_overlay)
+    else:
+        angles = get_action_angles(action)
+        angles = merge_angles(angles, angle_overlay)
 
     # Horse: lift rider
     prop_list = resolve_props(props or [])

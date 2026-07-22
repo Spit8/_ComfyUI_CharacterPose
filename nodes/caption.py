@@ -7,38 +7,71 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..utils import tensor_to_np
+from ..utils import (
+    content_bbox,
+    crop_to_content,
+    extract_palette,
+    tensor_to_np,
+)
 
 ANTI_BONES = (
-    "CRITICAL: the pose guide image is an abstract stick-figure only — "
+    "CRITICAL: image 2 / the pose guide is an abstract stick-figure only — "
     "NEVER draw bones, skeleton, x-ray, anatomical limbs, white bone overlays, "
     "or OpenPose sticks on the character. Solid clothed opaque skin and clothing only."
 )
 
-POSE_FOLLOW = (
-    "Change ONLY the body pose to match the stick-figure pose guide. "
-    "Keep the exact same character identity, outfit, colors, and art style."
+DEFAULT_FALLBACK_CAPTION = (
+    "full-body 2D game character sprite, cartoon line art, clean flat colors, plain background"
 )
 
-DEFAULT_FALLBACK_CAPTION = (
-    "full-body 2D game character sprite, cartoon line art, clean colors, plain background"
-)
+
+def palette_hex_string(rgb: np.ndarray, n_colors: int = 8) -> str:
+    """Dominant garment palette as '#RRGGBB, #…' (background whites dropped)."""
+    try:
+        pal = extract_palette(rgb, n_colors=int(n_colors))
+    except Exception:
+        return ""
+    if pal is None or len(pal) == 0:
+        return ""
+    parts = []
+    for c in pal:
+        r, g, b = (int(round(float(x) * 255)) for x in c[:3])
+        # Skip near-white / empty-canvas centers — not character colors
+        if min(r, g, b) >= 235 and max(r, g, b) - min(r, g, b) < 25:
+            continue
+        parts.append(f"#{r:02X}{g:02X}{b:02X}")
+    return ", ".join(parts)
 
 
 def build_edit_prompt(
     caption: str,
     *,
+    palette_hex: str = "",
     prop_hint: str = "",
     extra: str = "",
     include_anti_bones: bool = True,
 ) -> str:
-    """Assemble a ready-to-use edit prompt from caption + optional prop hints."""
-    parts: list[str] = []
+    """Assemble an edit prompt that leads with appearance / color lock."""
     cap = (caption or "").strip() or DEFAULT_FALLBACK_CAPTION
+    pal = (palette_hex or "").strip()
+
+    parts: list[str] = []
     parts.append(
-        f"Full-body 2D game character sprite. Redraw the exact same character: {cap}."
+        "APPEARANCE LOCK — match this character exactly (face, hair, outfit, accessories, "
+        f"line weight, shading style): {cap}."
     )
-    parts.append(POSE_FOLLOW)
+    if pal:
+        parts.append(
+            f"COLOR LOCK — dominant garment / skin / accessory colors must be exactly: {pal}. "
+            "These are character colors only (ignore canvas white/empty background). "
+            "Do not recolor, desaturate, wash out, or invent new dominant hues."
+        )
+    parts.append(
+        "Keep the exact same art style and materials as the reference image "
+        "(including isometric / RTS sprite look if present). "
+        "Change ONLY the body pose to match the stick-figure pose guide. "
+        "Identity and colors must stay identical to the description above."
+    )
     hint = (prop_hint or "").strip()
     if hint:
         parts.append(hint.rstrip(".") + ".")
@@ -53,45 +86,76 @@ def build_edit_prompt(
     return " ".join(parts)
 
 
-def _heuristic_caption(rgb: np.ndarray) -> str:
-    """Cheap fallback when Florence-2 is unavailable: palette + size cues."""
+def _heuristic_caption(rgb: np.ndarray, palette_hex: str = "") -> str:
+    """Palette-aware fallback when no VLM is available."""
+    from ..utils import content_mask
+
     h, w, _ = rgb.shape
-    pixels = rgb.reshape(-1, 3).astype(np.float32)
-    mean = pixels.mean(axis=0)
-    # Dominant-ish via subsampled mode bins
-    quantized = (pixels // 32).astype(np.int32)
-    # Pack RGB bins
-    keys = quantized[:, 0] * 10000 + quantized[:, 1] * 100 + quantized[:, 2]
-    vals, counts = np.unique(keys, return_counts=True)
-    top = vals[int(np.argmax(counts))]
-    r = (top // 10000) * 32 + 16
-    g = ((top // 100) % 100) * 32 + 16
-    b = (top % 100) * 32 + 16
+    pal = palette_hex or palette_hex_string(rgb, n_colors=6)
+    mask = content_mask(rgb)
+    fill = float(np.mean(mask)) if mask.size else 1.0
 
-    def _color_name(rr: float, gg: float, bb: float) -> str:
-        if max(rr, gg, bb) < 50:
-            return "dark"
-        if min(rr, gg, bb) > 200:
-            return "light / pale"
-        if rr > gg + 40 and rr > bb + 40:
-            return "red / warm"
-        if gg > rr + 30 and gg > bb + 30:
+    def _name(hex_s: str) -> str:
+        try:
+            r = int(hex_s[1:3], 16)
+            g = int(hex_s[3:5], 16)
+            b = int(hex_s[5:7], 16)
+        except Exception:
+            return "mixed"
+        if max(r, g, b) < 45:
+            return "near-black"
+        if min(r, g, b) > 210:
+            return "near-white"
+        if r > g + 45 and r > b + 45:
+            return "red"
+        if r > 160 and g > 90 and b < 90:
+            return "orange/gold"
+        if g > r + 35 and g > b + 35:
             return "green"
-        if bb > rr + 30 and bb > gg + 30:
+        if b > r + 35 and b > g + 35:
             return "blue"
-        if rr > 150 and gg > 100 and bb < 80:
-            return "gold / yellow"
-        if rr > 100 and gg > 70 and bb > 40 and abs(rr - gg) < 40:
-            return "brown / tan"
-        return "multicolor"
+        if r > 100 and g > 70 and b > 40 and abs(r - g) < 45:
+            return "brown/tan"
+        if abs(r - g) < 20 and abs(g - b) < 20:
+            return "gray"
+        return "mixed"
 
-    aspect = h / max(1, w)
-    body = "tall full-body" if aspect > 1.2 else "full-body" if aspect > 0.85 else "wide / bust"
-    style = "pixel-art style" if min(h, w) < 256 else "cartoon / stylized illustration"
+    color_bits = []
+    if pal:
+        for hx in pal.split(",")[:5]:
+            hx = hx.strip()
+            if hx.startswith("#"):
+                name = _name(hx)
+                if name == "near-white":
+                    continue
+                color_bits.append(f"{name} ({hx})")
+    color_str = ", ".join(color_bits) if color_bits else "multicolor"
+
+    box = content_bbox(rgb)
+    if box is not None:
+        x0, y0, x1, y1 = box
+        ch, cw = max(1, y1 - y0), max(1, x1 - x0)
+        aspect = ch / float(cw)
+    else:
+        aspect = h / max(1, w)
+
+    body = "tall full-body" if aspect > 1.2 else "full-body" if aspect > 0.85 else "wide/bust"
+    # Large empty canvas → typical Flux isometric RTS asset
+    if fill < 0.35:
+        style = (
+            "isometric RTS game sprite, hand-painted or pre-rendered, "
+            "centered on empty background, readable silhouette"
+        )
+    elif min(h, w) < 192:
+        style = "pixel-art game sprite, limited palette, crisp pixels"
+    elif min(h, w) < 512:
+        style = "2D game character sprite, cartoon line art, flat or cel-shaded colors"
+    else:
+        style = "stylized 2D character illustration, clean outlines, game-ready sprite look"
+
     return (
-        f"{body} character, {style}, dominant colors {_color_name(r, g, b)}, "
-        f"average tone RGB({int(mean[0])},{int(mean[1])},{int(mean[2])}), "
-        f"game sprite look"
+        f"{body} character, {style}, clothing and details in {color_str}, "
+        f"preserve exact garment colors and silhouette from the reference"
     )
 
 
@@ -131,24 +195,28 @@ def caption_with_florence(
     rgb: np.ndarray,
     *,
     model_id: str = "microsoft/Florence-2-base",
-    max_tokens: int = 64,
-    style_bias: str = "game sprite",
+    max_tokens: int = 128,
+    style_bias: str = "2D game sprite, cartoon",
+    palette_hex: str = "",
 ) -> tuple[str, str]:
-    """Return (caption, backend_note). Falls back to heuristic on any failure."""
+    """Return (caption, backend_note). Falls back to palette heuristic on failure."""
+    pal = palette_hex or palette_hex_string(rgb)
+
     try:
         from PIL import Image
         from transformers import AutoModelForCausalLM, AutoProcessor
     except Exception as e:
-        return _heuristic_caption(rgb), f"fallback_heuristic (transformers unavailable: {e})"
+        return _heuristic_caption(rgb, pal), f"fallback_heuristic (install transformers for Florence-2: {e})"
 
     path = _resolve_florence_path(model_id)
     try:
         if _florence_cache["model"] is None or _florence_cache["id"] != path:
             processor = AutoProcessor.from_pretrained(path, trust_remote_code=True)
+            dtype = torch.float16 if torch.cuda.is_available() else torch.float32
             model = AutoModelForCausalLM.from_pretrained(
                 path,
                 trust_remote_code=True,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                torch_dtype=dtype,
             )
             if torch.cuda.is_available():
                 model = model.cuda()
@@ -159,8 +227,11 @@ def caption_with_florence(
 
         processor = _florence_cache["processor"]
         model = _florence_cache["model"]
-        pil = Image.fromarray(rgb)
+        # Crop away empty canvas so Florence focuses on the character
+        crop = crop_to_content(rgb, pad=0.08)
+        pil = Image.fromarray(crop)
 
+        # Detailed caption focused on character appearance + garment colors
         task = "<MORE_DETAILED_CAPTION>"
         inputs = processor(text=task, images=pil, return_tensors="pt")
         if torch.cuda.is_available():
@@ -180,21 +251,55 @@ def caption_with_florence(
         )
         caption = ""
         if isinstance(parsed, dict):
-            caption = str(parsed.get(task) or parsed.get("<DETAILED_CAPTION>") or next(iter(parsed.values()), ""))
+            caption = str(
+                parsed.get(task)
+                or parsed.get("<DETAILED_CAPTION>")
+                or next(iter(parsed.values()), "")
+            )
         else:
             caption = str(parsed)
         caption = caption.strip()
-        if style_bias and style_bias.strip().lower() not in caption.lower():
-            caption = f"{caption.rstrip('.')}, {style_bias.strip()}"
         if not caption:
-            return _heuristic_caption(rgb), "fallback_heuristic (empty florence output)"
-        return caption, f"florence2:{path}"
+            return _heuristic_caption(rgb, pal), "fallback_heuristic (empty florence output)"
+
+        # Enrich with style bias + palette if Florence omitted them
+        bits = [caption.rstrip(".")]
+        if style_bias and style_bias.strip().lower() not in caption.lower():
+            bits.append(style_bias.strip())
+        if pal and "palette" not in caption.lower() and "#" not in caption:
+            bits.append(f"color palette {pal}")
+        return ". ".join(bits), f"florence2:{path}"
     except Exception as e:
-        return _heuristic_caption(rgb), f"fallback_heuristic (florence error: {e})"
+        return _heuristic_caption(rgb, pal), f"fallback_heuristic (florence error: {e})"
+
+
+def describe_character(
+    rgb: np.ndarray,
+    *,
+    model_id: str = "microsoft/Florence-2-base",
+    max_tokens: int = 128,
+    style_bias: str = "2D game sprite, cartoon",
+    palette_colors: int = 8,
+) -> tuple[str, str, str]:
+    """Unified caption pipeline.
+
+    Returns (caption, palette_hex, backend_note).
+    Palette and Florence run on content-cropped pixels when possible.
+    """
+    crop = crop_to_content(rgb, pad=0.06)
+    pal = palette_hex_string(crop, n_colors=palette_colors)
+    caption, backend = caption_with_florence(
+        crop,
+        model_id=model_id,
+        max_tokens=max_tokens,
+        style_bias=style_bias,
+        palette_hex=pal,
+    )
+    return caption, pal, backend
 
 
 class CharacterCaption:
-    """Describe a character sprite (Florence-2 with heuristic fallback)."""
+    """Describe a character sprite (Florence-2 + palette color lock)."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -205,8 +310,9 @@ class CharacterCaption:
                     "STRING",
                     {"default": "microsoft/Florence-2-base"},
                 ),
-                "style_bias": ("STRING", {"default": "2D game sprite, cartoon"}),
-                "max_tokens": ("INT", {"default": 64, "min": 16, "max": 256}),
+                "style_bias": ("STRING", {"default": "2D game sprite, cartoon line art"}),
+                "max_tokens": ("INT", {"default": 128, "min": 32, "max": 256}),
+                "palette_colors": ("INT", {"default": 8, "min": 3, "max": 16}),
             },
             "optional": {
                 "character": ("CHARACTER",),
@@ -216,8 +322,8 @@ class CharacterCaption:
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING", "CHARACTER")
-    RETURN_NAMES = ("caption", "edit_prompt", "character")
+    RETURN_TYPES = ("STRING", "STRING", "STRING", "STRING", "CHARACTER")
+    RETURN_NAMES = ("caption", "edit_prompt", "palette_hex", "caption_backend", "character")
     FUNCTION = "caption"
     CATEGORY = "CharacterPose/Character"
 
@@ -225,55 +331,68 @@ class CharacterCaption:
         self,
         image,
         model_id="microsoft/Florence-2-base",
-        style_bias="2D game sprite, cartoon",
-        max_tokens=64,
+        style_bias="2D game sprite, cartoon line art",
+        max_tokens=128,
+        palette_colors=8,
         character=None,
         use_cached_caption=True,
         prop_hint="",
         extra="",
     ):
+        rgb = tensor_to_np(image)
         cached = ""
+        cached_pal = ""
         if character is not None and use_cached_caption:
             meta = character.get("metadata") or {}
             cached = str(meta.get("caption") or "").strip()
+            cached_pal = str(meta.get("palette_hex") or "").strip()
 
         if cached:
             caption = cached
+            pal = cached_pal or palette_hex_string(rgb, n_colors=int(palette_colors))
             backend = "cached"
         else:
-            rgb = tensor_to_np(image)
-            caption, backend = caption_with_florence(
+            caption, pal, backend = describe_character(
                 rgb,
                 model_id=model_id,
                 max_tokens=int(max_tokens),
                 style_bias=style_bias,
+                palette_colors=int(palette_colors),
             )
 
-        edit_prompt = build_edit_prompt(caption, prop_hint=prop_hint, extra=extra)
+        edit_prompt = build_edit_prompt(
+            caption, palette_hex=pal, prop_hint=prop_hint, extra=extra
+        )
 
         out_char = character
         if out_char is None:
             from ..formats.char_io import make_character
 
-            ref = (tensor_to_np(image).astype(np.float32) / 255.0).clip(0, 1)
+            ref = (rgb.astype(np.float32) / 255.0).clip(0, 1)
             out_char = make_character(
                 name="character",
                 reference_image=ref,
-                metadata={"caption": caption, "caption_backend": backend, "prompt_template": edit_prompt},
+                metadata={
+                    "caption": caption,
+                    "caption_backend": backend,
+                    "palette_hex": pal,
+                    "prompt_template": edit_prompt,
+                },
             )
         else:
             meta = dict(out_char.get("metadata") or {})
             meta["caption"] = caption
             meta["caption_backend"] = backend
+            meta["palette_hex"] = pal
             meta["prompt_template"] = edit_prompt
             out_char = dict(out_char)
             out_char["metadata"] = meta
 
-        return (caption, edit_prompt, out_char)
+        return (caption, edit_prompt, pal, backend, out_char)
 
 
 class BuildEditPrompt:
-    """Combine caption + prop hints into one edit prompt string."""
+    """Combine caption + palette + prop hints into one edit prompt string."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -282,6 +401,7 @@ class BuildEditPrompt:
                 "caption": ("STRING", {"default": "", "multiline": True}),
             },
             "optional": {
+                "palette_hex": ("STRING", {"default": ""}),
                 "prop_hint": ("STRING", {"default": "", "multiline": True}),
                 "extra": ("STRING", {"default": "", "multiline": True}),
                 "include_anti_bones": ("BOOLEAN", {"default": True}),
@@ -293,10 +413,18 @@ class BuildEditPrompt:
     FUNCTION = "build"
     CATEGORY = "CharacterPose/Character"
 
-    def build(self, caption="", prop_hint="", extra="", include_anti_bones=True):
+    def build(
+        self,
+        caption="",
+        palette_hex="",
+        prop_hint="",
+        extra="",
+        include_anti_bones=True,
+    ):
         return (
             build_edit_prompt(
                 caption,
+                palette_hex=palette_hex,
                 prop_hint=prop_hint,
                 extra=extra,
                 include_anti_bones=bool(include_anti_bones),

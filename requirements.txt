@@ -1,12 +1,13 @@
 # CharacterPose ComfyUI custom nodes
 # Soft deps: comfyui_controlnet_aux (DWPreprocessor), ComfyUI_IPAdapter_plus (CharacterRender/Repair)
-# Optional caption: transformers + Florence-2 (CP_CharacterCaption falls back to heuristic)
+# For good auto-captions (colors/style lock), install transformers — Florence-2 downloads on first run
 numpy>=1.22.0,<2
 opencv-python-headless>=4.8.0
 Pillow>=9.0.0
 safetensors>=0.4.0
 scikit-learn>=1.2.0
 scipy>=1.10.0
+# Recommended for CP_CharacterCaption / Prep auto_caption:
+transformers>=4.41.0
 # Optional:
-# transformers>=4.41.0
 # mediapipe>=0.10.0

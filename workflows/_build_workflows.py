@@ -31,10 +31,15 @@ def write_flux_klein():
         link(5, 3, 0, 22, 1, "VAE"),
         # image / prep
         link(6, 4, 0, 5, 0, "IMAGE"),
+        link(33, 4, 0, 26, 0, "IMAGE"),  # sprite -> DWPreprocessor
+        # Prep optional slots: 7=pose_keypoint, 8=dwpose_image (after 7 required)
+        link(34, 26, 1, 5, 7, "POSE_KEYPOINT"),
+        link(35, 26, 0, 5, 8, "IMAGE"),  # DWPose sticks IMAGE -> Prep.dwpose_image
         link(7, 4, 0, 9, 0, "IMAGE"),
         link(8, 5, 0, 13, 0, "IMAGE"),  # guide -> scale2
         link(9, 5, 1, 7, 1, "STRING"),  # edit_prompt -> CLIPTextEncode.text
-        link(10, 5, 3, 6, 0, "IMAGE"),  # preview
+        link(10, 5, 3, 6, 0, "IMAGE"),  # source_pose -> PreviewImage
+        link(32, 5, 4, 25, 0, "IMAGE"),  # preview_pose -> PreviewImage 2
         # conditioning chain
         link(11, 7, 0, 12, 0, "CONDITIONING"),
         link(12, 7, 0, 8, 0, "CONDITIONING"),
@@ -75,7 +80,7 @@ def write_flux_klein():
                 return L[0]
         return None
 
-    o = {i: outs(i) for i in range(1, 25)}
+    o = {i: outs(i) for i in range(1, 27)}
 
     nodes = [
         {
@@ -168,27 +173,67 @@ def write_flux_klein():
             "widgets_values": ["Example_Comfy.png", "image"],
         },
         {
-            "id": 5,
-            "type": "CP_PoseTransferPrep",
-            "pos": [420, 400],
-            "size": [360, 340],
+            "id": 26,
+            "type": "DWPreprocessor",
+            "pos": [400, 280],
+            "size": [315, 200],
             "flags": {},
             "order": 4,
             "mode": 0,
+            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(26, 0)}],
+            "outputs": [
+                {
+                    "name": "IMAGE",
+                    "type": "IMAGE",
+                    "links": o[26].get(0),
+                    "slot_index": 0,
+                },
+                {
+                    "name": "POSE_KEYPOINT",
+                    "type": "POSE_KEYPOINT",
+                    "links": o[26].get(1),
+                    "slot_index": 1,
+                },
+            ],
+            "title": "DWPose (source skeleton)",
+            "properties": {"Node name for S&R": "DWPreprocessor"},
+            "widgets_values": [
+                "enable",
+                "enable",
+                "enable",
+                1024,
+                "yolox_l.onnx",
+                "dw-ll_ucoco_384.onnx",
+                "disable",
+            ],
+        },
+        {
+            "id": 5,
+            "type": "CP_PoseTransferPrep",
+            "pos": [420, 500],
+            "size": [360, 360],
+            "flags": {},
+            "order": 5,
+            "mode": 0,
             "inputs": [
                 {"name": "image", "type": "IMAGE", "link": inp(5, 0)},
+                {"name": "pose_keypoint", "type": "POSE_KEYPOINT", "link": inp(5, 7)},
+                {"name": "dwpose_image", "type": "IMAGE", "link": inp(5, 8)},
                 {"name": "source_pose", "type": "POSE", "link": None},
             ],
             "outputs": [
                 {"name": "guide", "type": "IMAGE", "links": o[5].get(0), "slot_index": 0},
                 {"name": "edit_prompt", "type": "STRING", "links": o[5].get(1), "slot_index": 1},
                 {"name": "pose", "type": "POSE", "links": None, "slot_index": 2},
-                {"name": "preview", "type": "IMAGE", "links": o[5].get(3), "slot_index": 3},
-                {"name": "caption", "type": "STRING", "links": None, "slot_index": 4},
+                {"name": "source_pose", "type": "IMAGE", "links": o[5].get(3), "slot_index": 3},
+                {"name": "preview_pose", "type": "IMAGE", "links": o[5].get(4), "slot_index": 4},
+                {"name": "caption", "type": "STRING", "links": None, "slot_index": 5},
+                {"name": "caption_backend", "type": "STRING", "links": None, "slot_index": 6},
             ],
             "title": "Prep: caption + pose 3D + props",
             "properties": {"Node name for S&R": "CP_PoseTransferPrep"},
             "widgets_values": [
+                "library",
                 "walk_01",
                 "SE",
                 "none",
@@ -203,19 +248,37 @@ def write_flux_klein():
                 "",
                 0,
                 0,
+                "",
+                "https://api.openai.com/v1",
+                "gpt-4o-mini",
+                "",
             ],
         },
         {
             "id": 6,
             "type": "PreviewImage",
-            "pos": [420, 780],
+            "pos": [420, 900],
             "size": [280, 260],
             "flags": {},
-            "order": 5,
+            "order": 6,
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(6, 0)}],
             "outputs": [],
-            "title": "Preview pose overlay",
+            "title": "source_pose (sprite + squelette)",
+            "properties": {"Node name for S&R": "PreviewImage"},
+            "widgets_values": [],
+        },
+        {
+            "id": 25,
+            "type": "PreviewImage",
+            "pos": [720, 900],
+            "size": [280, 260],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(25, 0)}],
+            "outputs": [],
+            "title": "preview_pose (pose sortie)",
             "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
@@ -225,7 +288,7 @@ def write_flux_klein():
             "pos": [840, 40],
             "size": [520, 160],
             "flags": {},
-            "order": 6,
+            "order": 7,
             "mode": 0,
             "inputs": [
                 {"name": "clip", "type": "CLIP", "link": inp(7, 0)},
@@ -249,7 +312,7 @@ def write_flux_klein():
             "pos": [1400, 40],
             "size": [240, 46],
             "flags": {},
-            "order": 7,
+            "order": 8,
             "mode": 0,
             "inputs": [{"name": "conditioning", "type": "CONDITIONING", "link": inp(8, 0)}],
             "outputs": [
@@ -269,7 +332,7 @@ def write_flux_klein():
             "pos": [840, 280],
             "size": [300, 106],
             "flags": {},
-            "order": 8,
+            "order": 9,
             "mode": 0,
             "inputs": [{"name": "image", "type": "IMAGE", "link": inp(9, 0)}],
             "outputs": [
@@ -285,7 +348,7 @@ def write_flux_klein():
             "pos": [1180, 280],
             "size": [210, 66],
             "flags": {},
-            "order": 9,
+            "order": 10,
             "mode": 0,
             "inputs": [{"name": "image", "type": "IMAGE", "link": inp(10, 0)}],
             "outputs": [
@@ -302,7 +365,7 @@ def write_flux_klein():
             "pos": [1180, 380],
             "size": [210, 46],
             "flags": {},
-            "order": 10,
+            "order": 11,
             "mode": 0,
             "inputs": [
                 {"name": "pixels", "type": "IMAGE", "link": inp(11, 0)},
@@ -321,7 +384,7 @@ def write_flux_klein():
             "pos": [1400, 140],
             "size": [260, 46],
             "flags": {},
-            "order": 11,
+            "order": 12,
             "mode": 0,
             "inputs": [
                 {"name": "conditioning", "type": "CONDITIONING", "link": inp(12, 0)},
@@ -345,7 +408,7 @@ def write_flux_klein():
             "pos": [840, 520],
             "size": [300, 106],
             "flags": {},
-            "order": 12,
+            "order": 13,
             "mode": 0,
             "inputs": [{"name": "image", "type": "IMAGE", "link": inp(13, 0)}],
             "outputs": [
@@ -361,7 +424,7 @@ def write_flux_klein():
             "pos": [1180, 520],
             "size": [210, 46],
             "flags": {},
-            "order": 13,
+            "order": 14,
             "mode": 0,
             "inputs": [
                 {"name": "pixels", "type": "IMAGE", "link": inp(14, 0)},
@@ -380,7 +443,7 @@ def write_flux_klein():
             "pos": [1700, 140],
             "size": [260, 46],
             "flags": {},
-            "order": 14,
+            "order": 15,
             "mode": 0,
             "inputs": [
                 {"name": "conditioning", "type": "CONDITIONING", "link": inp(15, 0)},
@@ -404,7 +467,7 @@ def write_flux_klein():
             "pos": [1700, 280],
             "size": [270, 106],
             "flags": {},
-            "order": 15,
+            "order": 16,
             "mode": 0,
             "inputs": [
                 {"name": "width", "type": "INT", "link": inp(16, 0), "widget": {"name": "width"}},
@@ -422,7 +485,7 @@ def write_flux_klein():
             "pos": [1700, 420],
             "size": [270, 106],
             "flags": {},
-            "order": 16,
+            "order": 17,
             "mode": 0,
             "inputs": [
                 {"name": "width", "type": "INT", "link": inp(17, 0), "widget": {"name": "width"}},
@@ -440,7 +503,7 @@ def write_flux_klein():
             "pos": [2000, 40],
             "size": [270, 98],
             "flags": {},
-            "order": 17,
+            "order": 18,
             "mode": 0,
             "inputs": [
                 {"name": "model", "type": "MODEL", "link": inp(18, 0)},
@@ -459,7 +522,7 @@ def write_flux_klein():
             "pos": [2000, 180],
             "size": [270, 58],
             "flags": {},
-            "order": 18,
+            "order": 19,
             "mode": 0,
             "inputs": [],
             "outputs": [
@@ -474,7 +537,7 @@ def write_flux_klein():
             "pos": [2000, 280],
             "size": [270, 82],
             "flags": {},
-            "order": 19,
+            "order": 20,
             "mode": 0,
             "inputs": [],
             "outputs": [
@@ -489,7 +552,7 @@ def write_flux_klein():
             "pos": [2320, 120],
             "size": [280, 106],
             "flags": {},
-            "order": 20,
+            "order": 21,
             "mode": 0,
             "inputs": [
                 {"name": "noise", "type": "NOISE", "link": inp(21, 0)},
@@ -511,7 +574,7 @@ def write_flux_klein():
             "pos": [2640, 120],
             "size": [220, 46],
             "flags": {},
-            "order": 21,
+            "order": 22,
             "mode": 0,
             "inputs": [
                 {"name": "samples", "type": "LATENT", "link": inp(22, 0)},
@@ -529,7 +592,7 @@ def write_flux_klein():
             "pos": [2640, 220],
             "size": [360, 400],
             "flags": {},
-            "order": 22,
+            "order": 23,
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(23, 0)}],
             "outputs": [],
@@ -542,24 +605,25 @@ def write_flux_klein():
             "pos": [40, 760],
             "size": [340, 280],
             "flags": {},
-            "order": 23,
+            "order": 24,
             "mode": 0,
             "inputs": [],
             "outputs": [],
             "properties": {"text": ""},
             "widgets_values": [
                 "CharacterPose — Flux.2 Klein (Prep)\n\n"
-                "LoadImage → CP_PoseTransferPrep → guide + edit_prompt\n"
-                "ref1 = sprite | ref2 = OpenPose guide\n"
-                "Prompt auto branche sur CLIPTextEncode.\n\n"
-                "Hard lock: pose_transfer_qwen_controlnet.json"
+                "DWPreprocessor → Prep.pose_keypoint + dwpose_image\n"
+                "pour caler le vrai squelette sur source_pose.\n"
+                "Sans DWPose: sprite seul (pas de faux T-pose).\n"
+                "preview_pose = pose cible seule\n"
+                "guide = pose + props (ref2 Flux)\n"
             ],
         },
     ]
 
     data = {
-        "last_node_id": 24,
-        "last_link_id": 31,
+        "last_node_id": 26,
+        "last_link_id": 35,
         "nodes": nodes,
         "links": links,
         "groups": [
@@ -679,9 +743,14 @@ def write_qwen():
         link(4, 4, 0, 10, 2, "CONTROL_NET"),
         link(5, 5, 0, 6, 0, "IMAGE"),
         link(6, 5, 0, 11, 0, "IMAGE"),
+        link(22, 5, 0, 18, 0, "IMAGE"),  # sprite -> DWPreprocessor
+        # Prep optional: 7=pose_keypoint, 8=dwpose_image
+        link(23, 18, 1, 6, 7, "POSE_KEYPOINT"),
+        link(24, 18, 0, 6, 8, "IMAGE"),
         link(8, 6, 0, 10, 3, "IMAGE"),
         link(9, 6, 1, 8, 1, "STRING"),
-        link(10, 6, 3, 7, 0, "IMAGE"),
+        link(10, 6, 3, 7, 0, "IMAGE"),  # source_pose -> Preview
+        link(21, 6, 4, 17, 0, "IMAGE"),  # preview_pose -> Preview 2
         link(11, 8, 0, 10, 0, "CONDITIONING"),
         link(12, 9, 0, 10, 1, "CONDITIONING"),
         link(13, 10, 0, 13, 1, "CONDITIONING"),
@@ -694,7 +763,7 @@ def write_qwen():
         link(20, 14, 0, 15, 0, "IMAGE"),
     ]
 
-    o = {i: outs(i) for i in range(1, 17)}
+    o = {i: outs(i) for i in range(1, 19)}
 
     nodes = [
         {
@@ -826,18 +895,23 @@ def write_qwen():
             "mode": 0,
             "inputs": [
                 {"name": "image", "type": "IMAGE", "link": inp(6, 0)},
+                {"name": "pose_keypoint", "type": "POSE_KEYPOINT", "link": inp(6, 7)},
+                {"name": "dwpose_image", "type": "IMAGE", "link": inp(6, 8)},
                 {"name": "source_pose", "type": "POSE", "link": None},
             ],
             "outputs": [
                 {"name": "guide", "type": "IMAGE", "links": o[6].get(0), "slot_index": 0},
                 {"name": "edit_prompt", "type": "STRING", "links": o[6].get(1), "slot_index": 1},
                 {"name": "pose", "type": "POSE", "links": None, "slot_index": 2},
-                {"name": "preview", "type": "IMAGE", "links": o[6].get(3), "slot_index": 3},
-                {"name": "caption", "type": "STRING", "links": None, "slot_index": 4},
+                {"name": "source_pose", "type": "IMAGE", "links": o[6].get(3), "slot_index": 3},
+                {"name": "preview_pose", "type": "IMAGE", "links": o[6].get(4), "slot_index": 4},
+                {"name": "caption", "type": "STRING", "links": None, "slot_index": 5},
+                {"name": "caption_backend", "type": "STRING", "links": None, "slot_index": 6},
             ],
             "title": "Prep (caption + pose 3D + props)",
             "properties": {"Node name for S&R": "CP_PoseTransferPrep"},
             "widgets_values": [
+                "library",
                 "idle",
                 "SE",
                 "sword",
@@ -852,6 +926,45 @@ def write_qwen():
                 "",
                 0,
                 0,
+                "",
+                "https://api.openai.com/v1",
+                "gpt-4o-mini",
+                "",
+            ],
+        },
+        {
+            "id": 18,
+            "type": "DWPreprocessor",
+            "pos": [400, 280],
+            "size": [315, 200],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(18, 0)}],
+            "outputs": [
+                {
+                    "name": "IMAGE",
+                    "type": "IMAGE",
+                    "links": o[18].get(0),
+                    "slot_index": 0,
+                },
+                {
+                    "name": "POSE_KEYPOINT",
+                    "type": "POSE_KEYPOINT",
+                    "links": o[18].get(1),
+                    "slot_index": 1,
+                },
+            ],
+            "title": "DWPose (source skeleton)",
+            "properties": {"Node name for S&R": "DWPreprocessor"},
+            "widgets_values": [
+                "enable",
+                "enable",
+                "enable",
+                1024,
+                "yolox_l.onnx",
+                "dw-ll_ucoco_384.onnx",
+                "disable",
             ],
         },
         {
@@ -864,7 +977,21 @@ def write_qwen():
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(7, 0)}],
             "outputs": [],
-            "title": "Preview overlay",
+            "title": "source_pose (sprite + squelette)",
+            "properties": {"Node name for S&R": "PreviewImage"},
+            "widgets_values": [],
+        },
+        {
+            "id": 17,
+            "type": "PreviewImage",
+            "pos": [720, 900],
+            "size": [280, 260],
+            "flags": {},
+            "order": 6,
+            "mode": 0,
+            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(17, 0)}],
+            "outputs": [],
+            "title": "preview_pose (pose sortie)",
             "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
@@ -1046,20 +1173,16 @@ def write_qwen():
             "properties": {"text": ""},
             "widgets_values": [
                 "CharacterPose — Qwen + ControlNet\n\n"
-                "LoadImage → Prep → guide OpenPose\n"
-                "→ ControlNetApplyAdvanced (strength ~1.4)\n"
-                "Prompt auto depuis Prep.\n\n"
-                "Si besoin d'un encodeur Qwen Edit natif\n"
-                "(TextEncodeQwenImageEdit), remplace le\n"
-                "CLIPTextEncode positive et rebranche\n"
-                "edit_prompt + sprite + VAE."
+                "source_pose = sprite + squelette detecte\n"
+                "preview_pose = pose cible seule\n"
+                "guide → ControlNetApplyAdvanced\n"
             ],
         },
     ]
 
     data = {
-        "last_node_id": 16,
-        "last_link_id": 20,
+        "last_node_id": 18,
+        "last_link_id": 24,
         "nodes": nodes,
         "links": links,
         "groups": [
@@ -1126,12 +1249,15 @@ def write_qwen():
 
 
 def validate(path: Path) -> None:
+    """Sanity-check link ids exist; destination slots need not equal the
+    sparse inputs[] index (ComfyUI slots follow full INPUT_TYPES order).
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
     nodes = {n["id"]: n for n in data["nodes"]}
     links = {L[0]: L for L in data["links"]}
     errors = []
     for nid, n in nodes.items():
-        for i, inp in enumerate(n.get("inputs") or []):
+        for inp in n.get("inputs") or []:
             lid = inp.get("link")
             if lid is None:
                 continue
@@ -1139,9 +1265,9 @@ def validate(path: Path) -> None:
                 errors.append(f"node {nid}/{inp['name']}: missing link {lid}")
                 continue
             L = links[lid]
-            if L[3] != nid or L[4] != i:
+            if L[3] != nid:
                 errors.append(
-                    f"link {lid}: expected dst ({nid},{i}) got ({L[3]},{L[4]}) for {inp['name']}"
+                    f"link {lid}: expected dst node {nid} got {L[3]} for {inp['name']}"
                 )
         for oi, out in enumerate(n.get("outputs") or []):
             for lid in out.get("links") or []:

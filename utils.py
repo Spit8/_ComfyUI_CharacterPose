@@ -42,13 +42,100 @@ def batch_np_to_tensor(images: list[np.ndarray]) -> torch.Tensor:
     return torch.cat(tensors, dim=0)
 
 
+def content_mask(image_rgb: np.ndarray, *, luma_bg: float = 240.0) -> np.ndarray:
+    """Boolean HxW mask of likely character pixels (exclude flat bright/dark bg).
+
+    Heuristic for Flux-style sprites on large empty canvases:
+    - drop near-white low-saturation pixels
+    - drop near-black if they dominate corners (letterbox)
+    - keep saturated / mid-tone pixels that form the figure
+    """
+    rgb = np.asarray(image_rgb)
+    if rgb.ndim == 2:
+        rgb = np.stack([rgb] * 3, axis=-1)
+    # Alpha channel if present (H,W,4)
+    if rgb.shape[-1] == 4:
+        alpha = rgb[..., 3]
+        rgb = rgb[..., :3]
+        return alpha > 16
+
+    pix = rgb.astype(np.float32)
+    r, g, b = pix[..., 0], pix[..., 1], pix[..., 2]
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    mx = np.maximum(np.maximum(r, g), b)
+    mn = np.minimum(np.minimum(r, g), b)
+    sat = np.where(mx > 1e-3, (mx - mn) / np.maximum(mx, 1.0), 0.0)
+
+    # Bright flat background (typical white / off-white canvas)
+    is_bright_bg = (luma >= luma_bg) & (sat < 0.12)
+    # Very dark empty (rare) — only if most of image is dark
+    dark_frac = float(np.mean(luma < 25.0))
+    is_dark_bg = (luma < 18.0) & (sat < 0.08) & (dark_frac > 0.55)
+
+    mask = ~(is_bright_bg | is_dark_bg)
+
+    # If almost everything masked out, fall back to non-extreme luma
+    if float(np.mean(mask)) < 0.002:
+        mask = (luma > 20.0) & (luma < 245.0)
+    return mask.astype(bool)
+
+
+def content_bbox(
+    image_rgb: np.ndarray, *, pad: float = 0.04
+) -> tuple[int, int, int, int] | None:
+    """Tight bbox (x0,y0,x1,y1) exclusive-end around content_mask, or None."""
+    mask = content_mask(image_rgb)
+    ys, xs = np.where(mask)
+    if len(xs) == 0 or len(ys) == 0:
+        return None
+    h, w = mask.shape
+    x0, x1 = int(xs.min()), int(xs.max()) + 1
+    y0, y1 = int(ys.min()), int(ys.max()) + 1
+    pw = int(round((x1 - x0) * pad))
+    ph = int(round((y1 - y0) * pad))
+    x0 = max(0, x0 - pw)
+    y0 = max(0, y0 - ph)
+    x1 = min(w, x1 + pw)
+    y1 = min(h, y1 + ph)
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return x0, y0, x1, y1
+
+
+def crop_to_content(image_rgb: np.ndarray, *, pad: float = 0.06) -> np.ndarray:
+    """Crop RGB to content bbox; return original if bbox unavailable."""
+    box = content_bbox(image_rgb, pad=pad)
+    if box is None:
+        return image_rgb
+    x0, y0, x1, y1 = box
+    return image_rgb[y0:y1, x0:x1]
+
+
 def extract_palette(image_rgb: np.ndarray, n_colors: int = 8) -> np.ndarray:
-    """K-means palette from RGB uint8 image -> float32 (K,3) in [0,1]."""
+    """K-means palette from character pixels only -> float32 (K,3) in [0,1].
+
+    Background (near-white / empty canvas) is excluded so COLOR LOCK reflects
+    garments rather than the Flux empty frame.
+    """
     from sklearn.cluster import MiniBatchKMeans
 
-    h, w, _ = image_rgb.shape
-    pixels = image_rgb.reshape(-1, 3).astype(np.float32)
-    # Subsample for speed
+    rgb = np.asarray(image_rgb)
+    if rgb.ndim == 2:
+        rgb = np.stack([rgb] * 3, axis=-1)
+    if rgb.shape[-1] == 4:
+        rgb = rgb[..., :3]
+
+    mask = content_mask(rgb)
+    pixels = rgb[mask].reshape(-1, 3).astype(np.float32)
+    if pixels.shape[0] < 16:
+        pixels = rgb.reshape(-1, 3).astype(np.float32)
+
+    # Drop remaining near-white from palette candidates
+    luma = pixels @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
+    keep = luma < 245.0
+    if int(np.sum(keep)) >= 16:
+        pixels = pixels[keep]
+
     if pixels.shape[0] > 20000:
         idx = np.random.default_rng(0).choice(pixels.shape[0], 20000, replace=False)
         sample = pixels[idx]
@@ -59,7 +146,7 @@ def extract_palette(image_rgb: np.ndarray, n_colors: int = 8) -> np.ndarray:
     km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=2048)
     km.fit(sample)
     centers = np.clip(km.cluster_centers_ / 255.0, 0.0, 1.0).astype(np.float32)
-    # Sort by luminance for stability
+    # Prefer chromatic / mid tones: demote near-white centers
     lum = centers @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
     order = np.argsort(lum)
     return centers[order]

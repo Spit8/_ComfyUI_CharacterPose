@@ -104,29 +104,8 @@ class ExtractPose:
             keypoints = estimate_keypoints_mediapipe(rgb)
 
         if keypoints is None:
-            # Fallback: standing T-pose-ish placeholder centered on canvas
-            cx, cy = w * 0.5, h * 0.45
-            s = min(w, h) * 0.35
-            keypoints = [
-                [cx, cy - s * 0.55, 1.0],  # nose
-                [cx, cy - s * 0.35, 1.0],  # neck
-                [cx + s * 0.25, cy - s * 0.35, 1.0],
-                [cx + s * 0.55, cy - s * 0.05, 1.0],
-                [cx + s * 0.75, cy + s * 0.2, 1.0],
-                [cx - s * 0.25, cy - s * 0.35, 1.0],
-                [cx - s * 0.55, cy - s * 0.05, 1.0],
-                [cx - s * 0.75, cy + s * 0.2, 1.0],
-                [cx + s * 0.15, cy + s * 0.15, 1.0],
-                [cx + s * 0.18, cy + s * 0.55, 1.0],
-                [cx + s * 0.18, cy + s * 0.95, 1.0],
-                [cx - s * 0.15, cy + s * 0.15, 1.0],
-                [cx - s * 0.18, cy + s * 0.55, 1.0],
-                [cx - s * 0.18, cy + s * 0.95, 1.0],
-                [cx + s * 0.08, cy - s * 0.58, 1.0],
-                [cx - s * 0.08, cy - s * 0.58, 1.0],
-                [cx + s * 0.15, cy - s * 0.55, 1.0],
-                [cx - s * 0.15, cy - s * 0.55, 1.0],
-            ]
+            # No fake T-pose — empty keypoints (blank preview)
+            keypoints = [[0.0, 0.0, 0.0] for _ in range(18)]
 
         pose = make_pose(keypoints, width=w, height=h, name=name or "extracted")
         preview = draw_openpose(pose, width=w, height=h)

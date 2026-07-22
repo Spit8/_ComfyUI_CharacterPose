@@ -35,7 +35,6 @@ warp_image_tps = warp_mod.warp_image_tps
 blend_skeleton_onto_image = warp_mod.blend_skeleton_onto_image
 compose_pose = pose3d.compose_pose
 build_edit_prompt = caption_mod.build_edit_prompt
-caption_with_florence = caption_mod.caption_with_florence
 
 
 def test_poses_library():
@@ -154,21 +153,182 @@ def test_pose3d_compose():
     print("OK pose3d compose + props + camera")
 
 
-def test_edit_prompt_and_caption_fallback():
-    prompt = build_edit_prompt(
-        "red bearded knight in tunic",
-        prop_hint="holding a sword in the right hand",
+def test_source_pose_no_fake_tpose():
+    """Without keypoints, preview must not invent a standing T-pose skeleton."""
+    utils_mod = importlib.import_module(f"{PKG}.utils")
+    parse = utils_mod.parse_dwpose_json_keypoints
+
+    # Typical DWPreprocessor OpenPose JSON (flat 18*3) in pixel coords
+    flat = []
+    for i in range(18):
+        flat.extend([20.0 + i * 2.0, 30.0 + (i % 5) * 8.0, 1.0])
+    payload = [
+        {
+            "people": [{"pose_keypoints_2d": flat}],
+            "canvas_width": 100,
+            "canvas_height": 200,
+        }
+    ]
+    kps = parse(payload, 50, 100)
+    assert kps is not None
+    assert len(kps) == 18
+    assert kps[0][2] > 0
+    # scaled from 100x200 canvas → 50x100 image
+    assert abs(kps[0][0] - flat[0] * 0.5) < 1e-3
+
+    empty = parse([{"people": [], "canvas_width": 64, "canvas_height": 64}], 64, 64)
+    assert empty is None
+    print("OK dwpose parse + no empty-people fake pose")
+
+
+def test_pose_from_prompt_parse_clamp():
+    from_prompt = importlib.import_module(f"{PKG}.pose3d.from_prompt")
+    parse = from_prompt.parse_llm_angles_text
+    clamp = from_prompt.clamp_joint_angles
+    angles_from_parsed = from_prompt.angles_from_parsed_joints
+    PosePromptError = from_prompt.PosePromptError
+
+    fenced = """```json
+    {"joints": {"r_shoulder": [-95, -25, -45], "r_elbow": [200, 0, 0], "bogus": [1,2,3]}, "notes": "guard"}
+    ```"""
+    parsed = parse(fenced)
+    assert "r_shoulder" in parsed
+    assert "bogus" not in parsed
+    assert parsed["r_elbow"][0] == 140.0  # clamped
+
+    over = clamp({"l_knee": (-50.0, 0.0, 0.0), "unknown_bone": (1.0, 2.0, 3.0)})
+    assert "unknown_bone" not in over
+    assert over["l_knee"][0] == 0.0
+
+    merged = angles_from_parsed({"r_shoulder": [-80.0, 0.0, -30.0]}, seed_action="idle")
+    assert merged["r_shoulder"][0] == -80.0
+    assert "l_shoulder" in merged  # from idle seed
+
+    result = compose_pose(
+        "text:test",
+        camera_preset="SE",
+        width=256,
+        height=256,
+        joint_angles=merged,
     )
-    assert "red bearded knight" in prompt
-    assert "sword" in prompt.lower()
-    assert "NEVER draw bones" in prompt or "never draw bones" in prompt.lower()
+    assert len(result["pose"]["keypoints"]) == 18
+    assert result["action"] == "text:test"
+
+    try:
+        parse("not json at all")
+        raise AssertionError("expected PosePromptError")
+    except PosePromptError:
+        pass
+
+    print("OK pose-from-prompt parse/clamp + joint_angles compose")
+
+
+def test_edit_prompt_and_caption_fallback():
+    from importlib import import_module
+
+    caption_mod2 = import_module(f"{PKG}.nodes.caption")
+    build = caption_mod2.build_edit_prompt
+    describe = caption_mod2.describe_character
+    palette_hex_string = caption_mod2.palette_hex_string
 
     rgb = np.zeros((64, 48, 3), dtype=np.uint8)
     rgb[10:50, 15:35] = (180, 40, 40)
-    cap, backend = caption_with_florence(rgb, style_bias="game sprite")
+    rgb[20:30, 18:32] = (40, 80, 180)
+    pal = palette_hex_string(rgb, n_colors=4)
+    assert "#" in pal
+
+    prompt = build(
+        "red bearded knight in tunic with gold trim",
+        palette_hex=pal,
+        prop_hint="holding a sword in the right hand",
+    )
+    assert "APPEARANCE LOCK" in prompt
+    assert "COLOR LOCK" in prompt
+    assert "garment" in prompt.lower() or "character colors" in prompt.lower()
+    assert "red bearded knight" in prompt
+    assert "#" in prompt
+    assert "sword" in prompt.lower()
+    assert "NEVER draw bones" in prompt or "never draw bones" in prompt.lower()
+
+    cap, pal2, backend = describe(rgb, style_bias="game sprite")
     assert isinstance(cap, str) and len(cap) > 5
+    assert "#" in pal2
     assert "fallback" in backend or "florence" in backend.lower()
     print(f"OK caption/prompt ({backend})")
+
+
+def test_fit_pose_and_filtered_palette():
+    warp_mod2 = importlib.import_module(f"{PKG}.nodes.warp")
+    utils_mod = importlib.import_module(f"{PKG}.utils")
+    fit = warp_mod2.fit_pose_to_source
+    content_bbox = utils_mod.content_bbox
+    extract_palette = utils_mod.extract_palette
+    caption_mod2 = importlib.import_module(f"{PKG}.nodes.caption")
+    palette_hex_string = caption_mod2.palette_hex_string
+
+    # Fake Flux canvas: mostly white, small red character blob
+    rgb = np.full((256, 256, 3), 255, dtype=np.uint8)
+    rgb[80:200, 100:160] = (200, 40, 40)
+    rgb[100:140, 110:150] = (50, 90, 180)
+    box = content_bbox(rgb)
+    assert box is not None
+    x0, y0, x1, y1 = box
+    assert (x1 - x0) < 200 and (y1 - y0) < 200
+
+    pal = extract_palette(rgb, n_colors=4)
+    # No center should be near-white
+    for c in pal:
+        lum = float(c @ np.array([0.299, 0.587, 0.114], dtype=np.float32))
+        assert lum < 0.92, f"palette still has near-white: {c}"
+
+    hex_s = palette_hex_string(rgb, n_colors=4)
+    assert "#" in hex_s
+    assert "#FFFFFF" not in hex_s.upper()
+
+    # Source pose matching content height ~120px
+    src = make_pose(
+        [
+            [130, 90, 1],
+            [130, 110, 1],
+            [150, 110, 1],
+            [160, 140, 1],
+            [165, 165, 1],
+            [110, 110, 1],
+            [100, 140, 1],
+            [95, 165, 1],
+            [145, 160, 1],
+            [148, 190, 1],
+            [150, 210, 1],
+            [115, 160, 1],
+            [112, 190, 1],
+            [110, 210, 1],
+            [135, 85, 1],
+            [125, 85, 1],
+            [140, 88, 1],
+            [120, 88, 1],
+        ],
+        width=256,
+        height=256,
+        name="src",
+    )
+    # Large target pose (taller bbox)
+    tgt = compose_pose("idle", camera_preset="SE", width=256, height=256)["pose"]
+    fitted = fit(tgt, src)
+    src_ys = [kp[1] for kp in src["keypoints"] if kp[2] > 0]
+    fit_ys = [kp[1] for kp in fitted["keypoints"] if kp[2] > 0]
+    src_h = max(src_ys) - min(src_ys)
+    fit_h = max(fit_ys) - min(fit_ys)
+    ratio = fit_h / max(1e-3, src_h)
+    assert 0.85 <= ratio <= 1.15, f"fit height ratio {ratio}"
+
+    # Content-box fallback when no source pose
+    fitted2 = fit(tgt, None, content_box=box)
+    fit2_ys = [kp[1] for kp in fitted2["keypoints"] if kp[2] > 0]
+    fit2_h = max(fit2_ys) - min(fit2_ys)
+    box_h = (y1 - y0) * 0.90
+    assert abs(fit2_h - box_h) / box_h < 0.2
+
+    print("OK fit_pose + filtered palette")
 
 
 def test_node_mappings_import():
@@ -191,6 +351,9 @@ if __name__ == "__main__":
     test_warp_import()
     test_blend_skeleton()
     test_pose3d_compose()
+    test_source_pose_no_fake_tpose()
+    test_pose_from_prompt_parse_clamp()
     test_edit_prompt_and_caption_fallback()
+    test_fit_pose_and_filtered_palette()
     test_node_mappings_import()
     print("All smoke tests passed.")

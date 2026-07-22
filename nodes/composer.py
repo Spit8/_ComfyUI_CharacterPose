@@ -7,12 +7,13 @@ import torch
 
 from ..formats.pose_io import make_pose, scale_pose
 from ..pose3d.camera import CAMERA_PRESETS, list_camera_presets
+from ..pose3d.from_prompt import PosePromptError, angles_from_text_prompt
 from ..pose3d.presets import list_action_presets
 from ..pose3d.project import compose_pose
 from ..pose3d.props import list_props
-from ..utils import draw_openpose, np_to_tensor, tensor_to_np
-from .caption import build_edit_prompt, caption_with_florence
-from .warp import align_pose_to_source
+from ..utils import content_bbox, draw_openpose, np_to_tensor, tensor_to_np
+from .caption import build_edit_prompt, describe_character
+from .warp import fit_pose_to_source
 
 try:
     import cv2
@@ -21,6 +22,48 @@ except Exception:  # pragma: no cover
 
 
 PROP_COLOR = (0, 220, 255)  # RGB cyan-ish for props (distinct from OpenPose)
+POSE_SOURCES = ["library", "text"]
+_LLM_DEFAULT_BASE = "https://api.openai.com/v1"
+_LLM_DEFAULT_MODEL = "gpt-4o-mini"
+
+
+def _llm_input_types() -> dict:
+    return {
+        "pose_prompt": ("STRING", {"default": "", "multiline": True}),
+        "llm_base_url": ("STRING", {"default": _LLM_DEFAULT_BASE}),
+        "llm_model": ("STRING", {"default": _LLM_DEFAULT_MODEL}),
+        "llm_api_key": ("STRING", {"default": ""}),
+    }
+
+
+def _resolve_compose_angles(
+    pose_source: str,
+    action: str,
+    pose_prompt: str,
+    llm_base_url: str,
+    llm_model: str,
+    llm_api_key: str,
+) -> tuple[str, dict | None]:
+    """Return (action_label, joint_angles_or_None for compose_pose)."""
+    source = (pose_source or "library").strip().lower()
+    if source == "text":
+        try:
+            angles = angles_from_text_prompt(
+                pose_prompt,
+                base_url=llm_base_url or _LLM_DEFAULT_BASE,
+                api_key=llm_api_key or None,
+                model=llm_model or _LLM_DEFAULT_MODEL,
+                seed_action="idle",
+            )
+        except PosePromptError:
+            raise
+        except Exception as e:  # pragma: no cover
+            raise PosePromptError(f"Text pose failed: {e}") from e
+        note = (pose_prompt or "").strip().replace("\n", " ")
+        if len(note) > 48:
+            note = note[:45] + "..."
+        return (f"text:{note}" if note else "text", angles)
+    return (action or "idle", None)
 
 
 def _draw_prop_polylines(
@@ -61,21 +104,117 @@ def _draw_prop_polylines(
     return mask
 
 
-def _extract_source_pose_from_image(image) -> dict | None:
-    """Best-effort DWPose/MediaPipe extract for alignment; None if unavailable."""
+def _extract_source_pose_from_image(
+    image, pose_keypoint=None
+) -> tuple[dict | None, str]:
+    """Extract COCO-18 pose from DWPose JSON / MediaPipe.
+
+    Returns (pose_or_None, backend). Never invents a fake T-pose — callers
+    should skip skeleton overlay when pose is None.
+    """
+    from ..utils import (
+        estimate_keypoints_mediapipe,
+        parse_dwpose_json_keypoints,
+        try_dwpose_keypoints,
+    )
+
     rgb = tensor_to_np(image)
     h, w = rgb.shape[:2]
-    try:
-        from ..utils import estimate_keypoints_mediapipe, try_dwpose_keypoints
+    keypoints = None
+    backend = "none"
 
-        kps = try_dwpose_keypoints(rgb)
-        if kps is None:
-            kps = estimate_keypoints_mediapipe(rgb)
-        if kps is None:
-            return None
-        return make_pose(kps, width=w, height=h, name="source")
+    if pose_keypoint is not None:
+        try:
+            keypoints = parse_dwpose_json_keypoints(pose_keypoint, w, h)
+            if keypoints is not None:
+                backend = "dwpose_json"
+        except Exception:
+            keypoints = None
+
+    if keypoints is None:
+        try:
+            keypoints = try_dwpose_keypoints(rgb)
+            if keypoints is not None:
+                backend = "dwpose_detector"
+        except Exception:
+            keypoints = None
+
+    if keypoints is None:
+        try:
+            keypoints = estimate_keypoints_mediapipe(rgb)
+            if keypoints is not None:
+                backend = "mediapipe"
+        except Exception:
+            keypoints = None
+
+    if keypoints is None:
+        return None, backend
+
+    visible = sum(1 for kp in keypoints if kp[2] > 0)
+    if visible < 4:
+        return None, backend
+
+    return make_pose(keypoints, width=w, height=h, name="source"), backend
+
+
+def _resize_rgb(rgb: np.ndarray, w: int, h: int) -> np.ndarray:
+    if rgb.shape[0] == h and rgb.shape[1] == w:
+        return rgb
+    if cv2 is not None:
+        return cv2.resize(rgb, (w, h), interpolation=cv2.INTER_AREA)
+    from PIL import Image
+
+    return np.asarray(Image.fromarray(rgb).resize((w, h)), dtype=np.uint8)
+
+
+def _overlay_dwpose_image(base_rgb: np.ndarray, dwpose_rgb: np.ndarray) -> np.ndarray:
+    """Composite DWPreprocessor stick image onto the sprite (pixel-aligned)."""
+    h, w = base_rgb.shape[:2]
+    skel = _resize_rgb(dwpose_rgb, w, h)
+    # DWPose canvas is black + colored sticks — keep bright stick pixels
+    stick = skel.max(axis=2) > 24
+    if not np.any(stick):
+        return base_rgb
+    out = base_rgb.astype(np.float32)
+    sk = skel.astype(np.float32)
+    out[stick] = out[stick] * 0.2 + sk[stick] * 0.8
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def _overlay_skeleton(base_rgb: np.ndarray, pose: dict) -> np.ndarray:
+    """Draw OpenPose sticks onto the sprite."""
+    h, w = base_rgb.shape[:2]
+    skel = draw_openpose(pose, width=w, height=h)
+    try:
+        from .warp import blend_skeleton_onto_image
+
+        return blend_skeleton_onto_image(
+            base_rgb, skel, opacity=0.85, mode="overlay", stick_grow=2
+        )
     except Exception:
-        return None
+        stick = skel.max(axis=2) > 12
+        out = base_rgb.astype(np.float32)
+        out[stick] = out[stick] * 0.25 + skel[stick].astype(np.float32) * 0.75
+        return np.clip(out, 0, 255).astype(np.uint8)
+
+
+def _build_source_pose_preview(
+    base_rgb: np.ndarray,
+    *,
+    src_pose: dict | None,
+    dwpose_image=None,
+) -> np.ndarray:
+    """Sprite + real skeleton only (DWPose image preferred, else keypoints)."""
+    if dwpose_image is not None:
+        try:
+            dw = tensor_to_np(dwpose_image)
+            return _overlay_dwpose_image(base_rgb, dw)
+        except Exception:
+            pass
+    if src_pose is not None:
+        return _overlay_skeleton(base_rgb, src_pose)
+    return base_rgb
+
 
 
 class PoseComposer3D:
@@ -88,6 +227,7 @@ class PoseComposer3D:
         props = list_props()
         return {
             "required": {
+                "pose_source": (POSE_SOURCES, {"default": "library"}),
                 "action": (actions, {"default": "idle"}),
                 "camera_preset": (cams, {"default": "SE"}),
                 "yaw": ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
@@ -102,6 +242,7 @@ class PoseComposer3D:
             "optional": {
                 "prop2": (props, {"default": "none"}),
                 "fov_deg": ("FLOAT", {"default": 35.0, "min": 15.0, "max": 90.0, "step": 1.0}),
+                **_llm_input_types(),
             },
         }
 
@@ -124,6 +265,11 @@ class PoseComposer3D:
         prop="none",
         prop2="none",
         fov_deg=35.0,
+        pose_source="library",
+        pose_prompt="",
+        llm_base_url=_LLM_DEFAULT_BASE,
+        llm_model=_LLM_DEFAULT_MODEL,
+        llm_api_key="",
     ):
         props = []
         if prop and prop != "none":
@@ -151,13 +297,17 @@ class PoseComposer3D:
             if distance > 0.1:
                 cam_kwargs["distance"] = float(distance)
 
+        action_label, joint_angles = _resolve_compose_angles(
+            pose_source, action, pose_prompt, llm_base_url, llm_model, llm_api_key
+        )
         result = compose_pose(
-            action,
+            action_label,
             camera_preset=camera_preset,
             width=int(width),
             height=int(height),
             props=props,
             fov_deg=float(fov_deg),
+            joint_angles=joint_angles,
             **cam_kwargs,
         )
         pose = result["pose"]
@@ -182,6 +332,7 @@ class PoseTransferPrep:
         return {
             "required": {
                 "image": ("IMAGE",),
+                "pose_source": (POSE_SOURCES, {"default": "library"}),
                 "action": (actions, {"default": "idle"}),
                 "camera_preset": (cams, {"default": "SE"}),
                 "prop": (props, {"default": "none"}),
@@ -189,6 +340,9 @@ class PoseTransferPrep:
                 "auto_caption": ("BOOLEAN", {"default": True}),
             },
             "optional": {
+                # Keep pose_keypoint / dwpose_image first so workflow link slots stay stable
+                "pose_keypoint": ("POSE_KEYPOINT",),
+                "dwpose_image": ("IMAGE",),
                 "prop2": (props, {"default": "none"}),
                 "yaw": ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
                 "pitch": ("FLOAT", {"default": 0.0, "min": -60.0, "max": 60.0, "step": 1.0}),
@@ -199,11 +353,20 @@ class PoseTransferPrep:
                 "source_pose": ("POSE",),
                 "width": ("INT", {"default": 0, "min": 0, "max": 4096}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 4096}),
+                **_llm_input_types(),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "POSE", "IMAGE", "STRING")
-    RETURN_NAMES = ("guide", "edit_prompt", "pose", "preview", "caption")
+    RETURN_TYPES = ("IMAGE", "STRING", "POSE", "IMAGE", "IMAGE", "STRING", "STRING")
+    RETURN_NAMES = (
+        "guide",
+        "edit_prompt",
+        "pose",
+        "source_pose",
+        "preview_pose",
+        "caption",
+        "caption_backend",
+    )
     FUNCTION = "prep"
     CATEGORY = "CharacterPose/Pose"
 
@@ -223,8 +386,15 @@ class PoseTransferPrep:
         caption_override="",
         extra_prompt="",
         source_pose=None,
+        pose_keypoint=None,
+        dwpose_image=None,
         width=0,
         height=0,
+        pose_source="library",
+        pose_prompt="",
+        llm_base_url=_LLM_DEFAULT_BASE,
+        llm_model=_LLM_DEFAULT_MODEL,
+        llm_api_key="",
     ):
         rgb = tensor_to_np(image)
         ih, iw = rgb.shape[:2]
@@ -248,68 +418,98 @@ class PoseTransferPrep:
                 "roll": preset["roll"] + float(roll),
             }
 
+        action_label, joint_angles = _resolve_compose_angles(
+            pose_source, action, pose_prompt, llm_base_url, llm_model, llm_api_key
+        )
         result = compose_pose(
-            action,
+            action_label,
             camera_preset=camera_preset,
             width=w,
             height=h,
             props=props,
+            joint_angles=joint_angles,
             **cam_kwargs,
         )
         pose = result["pose"]
 
+        # Detect / resolve source skeleton (real detection only — no fake T-pose)
         src = source_pose
-        if align_to_source:
-            if src is None:
-                src = _extract_source_pose_from_image(image)
-            if src is not None:
-                src_scaled = scale_pose(src, w, h) if (src.get("width") != w or src.get("height") != h) else src
-                pose = align_pose_to_source(pose, src_scaled)
-                pose["width"] = w
-                pose["height"] = h
+        det_backend = "injected" if src is not None else "none"
+        if src is None:
+            src, det_backend = _extract_source_pose_from_image(
+                image, pose_keypoint=pose_keypoint
+            )
+        if src is not None and (src.get("width") != w or src.get("height") != h):
+            src = scale_pose(src, w, h)
 
-        guide = draw_openpose(pose, width=w, height=h)
+        if align_to_source:
+            box = content_bbox(rgb)
+            if box is not None and (w != iw or h != ih):
+                # Scale content bbox into output canvas coords
+                sx, sy = w / float(iw), h / float(ih)
+                x0, y0, x1, y1 = box
+                box = (
+                    int(round(x0 * sx)),
+                    int(round(y0 * sy)),
+                    int(round(x1 * sx)),
+                    int(round(y1 * sy)),
+                )
+            pose = fit_pose_to_source(pose, src, content_box=box)
+            pose["width"] = w
+            pose["height"] = h
+
+        # preview_pose / guide: output pose only (+ props on guide for generation)
+        preview_pose = draw_openpose(pose, width=w, height=h)
+        guide = preview_pose.copy()
         _draw_prop_polylines(guide, result["prop_polylines_2d"])
 
-        # Caption
+        # source_pose: sprite + real skeleton (DWPose IMAGE preferred)
+        base = _resize_rgb(rgb, w, h)
+        source_pose_img = _build_source_pose_preview(
+            base, src_pose=src, dwpose_image=dwpose_image
+        )
+        _ = det_backend  # available for future debug output
+
+        # Caption + palette color lock
         override = (caption_override or "").strip()
         if override:
+            from .caption import palette_hex_string
+
             caption = override
+            palette_hex = palette_hex_string(rgb)
+            backend = "override"
         elif auto_caption:
-            caption, _ = caption_with_florence(rgb, style_bias="2D game sprite, cartoon")
+            caption, palette_hex, backend = describe_character(
+                rgb,
+                style_bias=(
+                    "isometric RTS game sprite, hand-painted / pre-rendered, "
+                    "clean readable silhouette, 2D game character"
+                ),
+                max_tokens=128,
+                palette_colors=8,
+            )
         else:
+            from .caption import palette_hex_string
+
+            palette_hex = palette_hex_string(rgb)
             caption = "full-body 2D game character sprite, cartoon line art"
+            backend = "disabled"
 
         edit_prompt = build_edit_prompt(
             caption,
+            palette_hex=palette_hex,
             prop_hint=result["prop_hint"],
             extra=extra_prompt,
         )
-
-        # Preview: sprite with skeleton overlay (simple alpha)
-        preview = rgb.copy()
-        if preview.shape[0] != h or preview.shape[1] != w:
-            if cv2 is not None:
-                preview = cv2.resize(preview, (w, h), interpolation=cv2.INTER_AREA)
-            else:
-                from PIL import Image
-
-                preview = np.asarray(Image.fromarray(preview).resize((w, h)), dtype=np.uint8)
-        g = guide
-        if g.shape[0] != preview.shape[0] or g.shape[1] != preview.shape[1]:
-            if cv2 is not None:
-                g = cv2.resize(g, (preview.shape[1], preview.shape[0]), interpolation=cv2.INTER_NEAREST)
-        stick = g.sum(axis=2) > 0
-        blend = preview.astype(np.float32)
-        blend[stick] = blend[stick] * 0.35 + g[stick].astype(np.float32) * 0.65
-        preview = np.clip(blend, 0, 255).astype(np.uint8)
 
         return (
             np_to_tensor(guide),
             edit_prompt,
             pose,
-            np_to_tensor(preview),
+            np_to_tensor(source_pose_img),
+            np_to_tensor(preview_pose),
             caption,
+            backend,
         )
 
 

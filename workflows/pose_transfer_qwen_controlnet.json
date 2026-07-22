@@ -1,6 +1,6 @@
 {
-  "last_node_id": 16,
-  "last_link_id": 20,
+  "last_node_id": 18,
+  "last_link_id": 24,
   "nodes": [
     {
       "id": 1,
@@ -185,7 +185,8 @@
           "type": "IMAGE",
           "links": [
             5,
-            6
+            6,
+            22
           ],
           "slot_index": 0
         },
@@ -226,6 +227,16 @@
           "link": 5
         },
         {
+          "name": "pose_keypoint",
+          "type": "POSE_KEYPOINT",
+          "link": 23
+        },
+        {
+          "name": "dwpose_image",
+          "type": "IMAGE",
+          "link": 24
+        },
+        {
           "name": "source_pose",
           "type": "POSE",
           "link": null
@@ -255,7 +266,7 @@
           "slot_index": 2
         },
         {
-          "name": "preview",
+          "name": "source_pose",
           "type": "IMAGE",
           "links": [
             10
@@ -263,10 +274,24 @@
           "slot_index": 3
         },
         {
+          "name": "preview_pose",
+          "type": "IMAGE",
+          "links": [
+            21
+          ],
+          "slot_index": 4
+        },
+        {
           "name": "caption",
           "type": "STRING",
           "links": null,
-          "slot_index": 4
+          "slot_index": 5
+        },
+        {
+          "name": "caption_backend",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 6
         }
       ],
       "title": "Prep (caption + pose 3D + props)",
@@ -274,6 +299,7 @@
         "Node name for S&R": "CP_PoseTransferPrep"
       },
       "widgets_values": [
+        "library",
         "idle",
         "SE",
         "sword",
@@ -287,7 +313,64 @@
         "",
         "",
         0,
-        0
+        0,
+        "",
+        "https://api.openai.com/v1",
+        "gpt-4o-mini",
+        ""
+      ]
+    },
+    {
+      "id": 18,
+      "type": "DWPreprocessor",
+      "pos": [
+        400,
+        280
+      ],
+      "size": [
+        315,
+        200
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 22
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            24
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "POSE_KEYPOINT",
+          "type": "POSE_KEYPOINT",
+          "links": [
+            23
+          ],
+          "slot_index": 1
+        }
+      ],
+      "title": "DWPose (source skeleton)",
+      "properties": {
+        "Node name for S&R": "DWPreprocessor"
+      },
+      "widgets_values": [
+        "enable",
+        "enable",
+        "enable",
+        1024,
+        "yolox_l.onnx",
+        "dw-ll_ucoco_384.onnx",
+        "disable"
       ]
     },
     {
@@ -312,7 +395,35 @@
         }
       ],
       "outputs": [],
-      "title": "Preview overlay",
+      "title": "source_pose (sprite + squelette)",
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 17,
+      "type": "PreviewImage",
+      "pos": [
+        720,
+        900
+      ],
+      "size": [
+        280,
+        260
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 21
+        }
+      ],
+      "outputs": [],
+      "title": "preview_pose (pose sortie)",
       "properties": {
         "Node name for S&R": "PreviewImage"
       },
@@ -700,7 +811,7 @@
         "text": ""
       },
       "widgets_values": [
-        "CharacterPose \u2014 Qwen + ControlNet\n\nLoadImage \u2192 Prep \u2192 guide OpenPose\n\u2192 ControlNetApplyAdvanced (strength ~1.4)\nPrompt auto depuis Prep.\n\nSi besoin d'un encodeur Qwen Edit natif\n(TextEncodeQwenImageEdit), remplace le\nCLIPTextEncode positive et rebranche\nedit_prompt + sprite + VAE."
+        "CharacterPose \u2014 Qwen + ControlNet\n\nsource_pose = sprite + squelette detecte\npreview_pose = pose cible seule\nguide \u2192 ControlNetApplyAdvanced\n"
       ]
     }
   ],
@@ -754,6 +865,30 @@
       "IMAGE"
     ],
     [
+      22,
+      5,
+      0,
+      18,
+      0,
+      "IMAGE"
+    ],
+    [
+      23,
+      18,
+      1,
+      6,
+      7,
+      "POSE_KEYPOINT"
+    ],
+    [
+      24,
+      18,
+      0,
+      6,
+      8,
+      "IMAGE"
+    ],
+    [
       8,
       6,
       0,
@@ -774,6 +909,14 @@
       6,
       3,
       7,
+      0,
+      "IMAGE"
+    ],
+    [
+      21,
+      6,
+      4,
+      17,
       0,
       "IMAGE"
     ],

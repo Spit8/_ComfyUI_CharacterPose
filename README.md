@@ -11,7 +11,7 @@ Custom nodes for **identity-preserving 2D character pose transfer**: take a sing
 - **`CP_PoseTransferPrep`** — one node: auto caption, 3D pose, camera, props → guide + edit prompt
 - **`CP_PoseComposer3D`** — kinematic skeleton with **8 camera presets** (S/SE/E/NE/N/NW/W/SW) + yaw/pitch/roll
 - **Props / mounts** on the guide (not in COCO-18): `sword`, `shield`, `staff`, `bow`, `horse`
-- **`CP_CharacterCaption`** — Florence-2 img2txt (heuristic fallback) + cached caption in `.char`
+- **`CP_CharacterCaption`** — Florence-2 img2txt + **palette hex color lock** (heuristic fallback) + cache `.char`
 - Legacy `.pose` library (SE/NE procedural) still available via `CP_PoseLibraryLoad`
 - Example workflows under `workflows/`
 
@@ -40,7 +40,7 @@ pip install -r ComfyUI_CharacterPose/requirements.txt
 | ComfyUI core Flux.2 / Klein nodes | Fast Flux workflow |
 | ComfyUI Qwen-Image-Edit nodes | Hard-lock Qwen workflow |
 | [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | Optional SDXL `CharacterRepair` path |
-| `transformers` + Florence-2 weights | Better auto-captions (`CP_CharacterCaption`) |
+| `transformers` + Florence-2 weights | **Recommended** — detailed auto-captions for color/style lock (`CP_CharacterCaption` / Prep) |
 
 ### DWPose ONNX
 
@@ -113,12 +113,33 @@ Alternative: DiffSynth Union LoRA `qwen_image_union_diffsynth_lora.safetensors` 
 
 ## Pose Composer 3D
 
-Node: `CP_PoseComposer3D`
+Node: `CP_PoseComposer3D` (also on `CP_PoseTransferPrep`)
 
-- **Actions:** `idle`, `walk_01..04`, `run_01..04`, `jump`, `fight_01/02`, `work_01/02`, `cast`, `ride_idle`
+- **`pose_source`:** `library` (named action preset) or `text` (LLM → joint angles)
+- **Actions (library):** `idle`, `walk_01..04`, `run_01..04`, `jump`, `fight_01/02`, `work_01/02`, `cast`, `ride_idle`
 - **Camera presets:** `S`, `SE`, `E`, `NE`, `N`, `NW`, `W`, `SW` — or enable `use_manual_camera` for absolute yaw/pitch/roll
 - **Props:** drawn in cyan on the guide (COCO-18 body unchanged for ControlNet compatibility)
 - Outputs: `POSE`, full `guide`, `prop_mask`, `prop_hint` (for prompts)
+
+### Pose from text (LLM)
+
+Set `pose_source=text` and fill `pose_prompt` (e.g. *"knight in boxing guard, fists near the face"*). The node calls an **OpenAI-compatible** chat API and applies returned Euler angles onto the kinematic skeleton.
+
+| Input | Notes |
+|-------|--------|
+| `llm_base_url` | Default `https://api.openai.com/v1` — use `http://127.0.0.1:11434/v1` for Ollama |
+| `llm_model` | Default `gpt-4o-mini` — e.g. `llama3.2` with Ollama |
+| `llm_api_key` | Or env `CHARACTERPOSE_LLM_API_KEY` / `OPENAI_API_KEY` (Ollama often accepts any non-empty key) |
+
+Existing workflows keep working: default `pose_source` is `library`.
+
+### `source_pose` preview
+
+Wire **DWPreprocessor** → Prep:
+- `POSE_KEYPOINT` → `pose_keypoint` (align + stick overlay)
+- `IMAGE` → `dwpose_image` (pixel-perfect sticks from DWPose)
+
+Without DWPose, Prep shows the **sprite alone** — it no longer invents a fake T-pose placeholder.
 
 Legacy 2D library (still useful):
 
@@ -135,10 +156,10 @@ python poses/_generate_poses.py
 
 | Node | Role |
 |------|------|
-| `CP_PoseTransferPrep` | Caption + 3D compose + align → guide + prompt |
+| `CP_PoseTransferPrep` | Caption + 3D compose + align → `guide`, `source_pose`, `preview_pose`, prompt |
 | `CP_PoseComposer3D` | 3D action/camera/props → POSE + guide |
-| `CP_CharacterCaption` | Florence-2 / fallback caption + edit prompt (+ `.char` cache) |
-| `CP_BuildEditPrompt` | Assemble caption + prop hints + anti-bones |
+| `CP_CharacterCaption` | Florence-2 + palette hex → caption / edit_prompt / backend |
+| `CP_BuildEditPrompt` | Assemble caption + palette + props + anti-bones |
 | `CP_ExtractPose` | Image (+ DWPose keypoint) → `POSE` |
 | `CP_PoseLibraryLoad` | Load built-in / custom `.pose` |
 | `CP_ApplyPose` | Draw OpenPose skeleton image |
@@ -160,7 +181,7 @@ python poses/_generate_poses.py
 
 - **Same-view bias:** a side/¾ sprite does not become a true front/back view for free; generative models approximate it (Qwen-Edit 2511 helps).
 - Props are **guide strokes + prompt hints**, not a separate ControlNet channel (unless you feed `prop_mask` / canny yourself).
-- Florence-2 is optional; without it, Prep uses a palette heuristic caption.
+- Florence-2 is **recommended** for detailed appearance; without `transformers`, Prep still injects a K-means **COLOR LOCK** palette into the prompt.
 - Geometric warp cannot invent limbs or camera angles; it only remaps pixels.
 
 ## Dev / tests
