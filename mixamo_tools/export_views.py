@@ -1,4 +1,4 @@
-"""CLI: Mixamo FBX → isometric OpenPose skeleton PNGs (SE/SO/NE/NO)."""
+"""CLI: Mixamo FBX → isometric OpenPose skeleton PNG + .pose (SE/SO/NE/NO)."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ REPO = ROOT.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from formats.pose_io import make_pose, save_pose  # noqa: E402
 from mixamo_tools.cameras import (  # noqa: E402
     CAMERA_PRESETS,
     VIEW_ORDER,
@@ -74,7 +75,12 @@ def export_views(
     size: int = 1024,
     stem: str | None = None,
     margin: float = 0.10,
+    write_png: bool = True,
+    write_pose: bool = True,
 ) -> list[Path]:
+    if not write_png and not write_pose:
+        raise ValueError("Nothing to write: both --no-png and --no-pose were set")
+
     anim = load_animation(fbx_path)
     n_frames = anim["n_frames"]
     views = resolve_views(view)
@@ -109,16 +115,41 @@ def export_views(
                 distance=distance,
             )
             kps = coco18_keypoints_2d(projected)
-            label = f"{v}  p{pi}/{n_pos}  f{fi}"
-            img = draw_openpose(kps, width=size, height=size, label=label)
-            path = out_dir / f"{prefix}_{v}_{pi:02d}.png"
-            Image.fromarray(img).save(path)
-            written.append(path)
-            print(f"wrote {path}")
+            base = f"{prefix}_{v}_{pi:02d}"
+
+            if write_pose:
+                pose = make_pose(
+                    kps,
+                    width=size,
+                    height=size,
+                    name=base,
+                    metadata={
+                        "source": str(fbx_path),
+                        "frame": int(fi),
+                        "view": v,
+                        "look_at": [float(x) for x in look_at],
+                        "distance": float(distance),
+                        "sample_index": int(pi),
+                        "positions": int(n_pos),
+                    },
+                )
+                pose_path = out_dir / f"{base}.pose"
+                save_pose(pose, pose_path)
+                written.append(pose_path)
+                print(f"wrote {pose_path}")
+
+            if write_png:
+                label = f"{v}  p{pi}/{n_pos}  f{fi}"
+                img = draw_openpose(kps, width=size, height=size, label=label)
+                png_path = out_dir / f"{base}.png"
+                Image.fromarray(img).save(png_path)
+                written.append(png_path)
+                print(f"wrote {png_path}")
 
     print(
         f"n_frames={n_frames} sampled={frame_indices} views={','.join(views)} "
-        f"look_at={look_at} distance={distance:.3f}"
+        f"look_at={look_at} distance={distance:.3f} "
+        f"png={write_png} pose={write_pose}"
     )
     return written
 
@@ -126,7 +157,7 @@ def export_views(
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description="Export isometric OpenPose views from a Mixamo FBX "
-        "(fixed camera across frames; optional view filter)."
+        "(PNG debug + .pose for ComfyUI PoseLibrary; fixed camera across frames)."
     )
     p.add_argument("--fbx", type=Path, default=DEFAULT_FBX, help="Path to Mixamo .fbx")
     p.add_argument(
@@ -156,6 +187,16 @@ def main(argv: list[str] | None = None) -> int:
         default=0.10,
         help="Canvas margin fraction when fitting camera distance (default: 0.10)",
     )
+    p.add_argument(
+        "--no-png",
+        action="store_true",
+        help="Skip writing debug PNG stick figures",
+    )
+    p.add_argument(
+        "--no-pose",
+        action="store_true",
+        help="Skip writing .pose JSON files",
+    )
     args = p.parse_args(argv)
 
     if not args.fbx.is_file():
@@ -175,6 +216,8 @@ def main(argv: list[str] | None = None) -> int:
             size=args.size,
             stem=args.stem,
             margin=args.margin,
+            write_png=not args.no_png,
+            write_pose=not args.no_pose,
         )
     except ValueError as e:
         print(str(e), file=sys.stderr)

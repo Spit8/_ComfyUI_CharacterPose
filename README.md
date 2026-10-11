@@ -2,17 +2,17 @@
 
 Custom nodes for **identity-preserving 2D character pose transfer**: take a single sprite and generate the same character in new RPG poses while keeping art style and appearance.
 
-> **Fast path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + 3D camera/props guide).  
+> **Fast path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + library `.pose` guide).  
 > **Hard pose lock:** **Qwen-Image-Edit** + ControlNet Union (`workflows/pose_transfer_qwen_controlnet.json`).  
 > Geometric warp (TPS / piecewise) melts cartoon sprites — do not use it as the main pipeline.
 
 ## Features
 
-- **`CP_PoseTransferPrep`** — one node: auto caption, 3D pose, camera, props → guide + edit prompt
-- **`CP_PoseComposer3D`** — kinematic skeleton with **8 camera presets** (S/SE/E/NE/N/NW/W/SW) + yaw/pitch/roll
-- **Props / mounts** on the guide (not in COCO-18): `sword`, `shield`, `staff`, `bow`, `horse`
+- **`CP_PoseTransferPrep`** — one node: auto caption, load any `.pose` from `poses/`, props hint → guide + edit prompt
+- **`CP_PoseComposer3D`** — optional kinematic skeleton (8 cameras + actions / text LLM) if you need a guide without a file
+- **Props** as text hints on Prep (`sword`, `shield`, …); 3D prop drawing stays on Composer 3D
 - **`CP_CharacterCaption`** — Florence-2 img2txt + **palette hex color lock** (heuristic fallback) + cache `.char`
-- Legacy `.pose` library (SE/NE procedural) still available via `CP_PoseLibraryLoad`
+- `.pose` library — build with [`mixamo_tools/`](mixamo_tools/) (Mixamo FBX → COCO-18), load via Prep or `CP_PoseLibraryLoad`
 - Example workflows under `workflows/`
 
 ## Install
@@ -58,7 +58,7 @@ custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/
 |------|----------|--------|
 | Fast iteration (~4 steps) | `pose_transfer_flux_klein.json` | Dual reference; soft pose guidance |
 | Strict pose / multi-angle | `pose_transfer_qwen_controlnet.json` | ControlNet keypoints strength ~1.2–1.8 |
-| Legacy 2D `.pose` files | Wire `CP_PoseLibraryLoad` + `CP_WarpToPose` manually | Still supported |
+| Mixamo `.pose` library | Wire `CP_PoseLibraryLoad` (+ optional warp) | Export via `mixamo_tools` CLI into `poses/` |
 
 ## Recommended workflow (Flux.2 Klein + Prep)
 
@@ -66,7 +66,7 @@ Open: `workflows/pose_transfer_flux_klein.json`
 
 ```
 LoadImage (sprite)
-  → CP_PoseTransferPrep (action, camera SE/…, prop)
+  → CP_PoseTransferPrep (pose_file from poses/, prop hint)
        → guide IMAGE + edit_prompt STRING
 Flux.2 Klein dual ReferenceLatent:
   ref1 = sprite | ref2 = guide
@@ -111,53 +111,45 @@ If `TextEncodeQwenImageEdit` is missing on your ComfyUI build, use the native Qw
 
 Alternative: DiffSynth Union LoRA `qwen_image_union_diffsynth_lora.safetensors` (openpose mode) instead of InstantX ControlNet.
 
-## Pose Composer 3D
+## Pose library (Mixamo → `.pose`)
 
-Node: `CP_PoseComposer3D` (also on `CP_PoseTransferPrep`)
+`CP_PoseTransferPrep` and `CP_PoseLibraryLoad` list **every** `*.pose` in package `poses/` and `ComfyUI/input/poses/` (no name filter). Add files, refresh the node definitions if the combo looks stale.
 
-- **`pose_source`:** `library` (named action preset) or `text` (LLM → joint angles)
-- **Actions (library):** `idle`, `walk_01..04`, `run_01..04`, `jump`, `fight_01/02`, `work_01/02`, `cast`, `ride_idle`
-- **Camera presets:** `S`, `SE`, `E`, `NE`, `N`, `NW`, `W`, `SW` — or enable `use_manual_camera` for absolute yaw/pitch/roll
-- **Props:** drawn in cyan on the guide (COCO-18 body unchanged for ControlNet compatibility)
-- Outputs: `POSE`, full `guide`, `prop_mask`, `prop_hint` (for prompts)
+```powershell
+cd mixamo_tools
+.\venv\Scripts\python.exe -m export_views --positions 4 --view SE --out-dir ..\poses
+```
 
-### Pose from text (LLM)
+| Orientation | Meaning |
+|-------------|---------|
+| `*_SE` / `*_se` | South-East — ¾ front-right |
+| `*_SO` / `*_so` | South-West — ¾ front-left |
+| `*_NE` / `*_ne` | North-East — ¾ back-right |
+| `*_NO` / `*_no` | North-West — ¾ back-left |
 
-Set `pose_source=text` and fill `pose_prompt` (e.g. *"knight in boxing guard, fists near the face"*). The node calls an **OpenAI-compatible** chat API and applies returned Euler angles onto the kinematic skeleton.
-
-| Input | Notes |
-|-------|--------|
-| `llm_base_url` | Default `https://api.openai.com/v1` — use `http://127.0.0.1:11434/v1` for Ollama |
-| `llm_model` | Default `gpt-4o-mini` — e.g. `llama3.2` with Ollama |
-| `llm_api_key` | Or env `CHARACTERPOSE_LLM_API_KEY` / `OPENAI_API_KEY` (Ollama often accepts any non-empty key) |
-
-Existing workflows keep working: default `pose_source` is `library`.
-
-### `source_pose` preview
+### `source_pose` preview (Prep)
 
 Wire **DWPreprocessor** → Prep:
 - `POSE_KEYPOINT` → `pose_keypoint` (align + stick overlay)
 - `IMAGE` → `dwpose_image` (pixel-perfect sticks from DWPose)
 
-Without DWPose, Prep shows the **sprite alone** — it no longer invents a fake T-pose placeholder.
+Without DWPose, Prep shows the **sprite alone** — no fake T-pose.
 
-Legacy 2D library (still useful):
+## Pose Composer 3D (optional)
 
-```bash
-python poses/_generate_poses.py
-```
+Node: `CP_PoseComposer3D` — separate from Prep. Use when you want a guide **without** a Mixamo `.pose`.
 
-| Orientation | Meaning |
-|-------------|---------|
-| `*_se` | South-East — ¾ front-right |
-| `*_ne` | North-East — ¾ back-right |
+- **`pose_source`:** `library` (named action preset) or `text` (LLM → joint angles)
+- **Camera presets:** `S`, `SE`, `E`, `NE`, `N`, `NW`, `W`, `SW`
+- **Props:** drawn in cyan on the guide
+- Outputs: `POSE`, `guide`, `prop_mask`, `prop_hint`
 
 ## Nodes (CharacterPose)
 
 | Node | Role |
 |------|------|
-| `CP_PoseTransferPrep` | Caption + 3D compose + align → `guide`, `source_pose`, `preview_pose`, prompt |
-| `CP_PoseComposer3D` | 3D action/camera/props → POSE + guide |
+| `CP_PoseTransferPrep` | Caption + load `.pose` + align → `guide`, `source_pose`, `preview_pose`, prompt |
+| `CP_PoseComposer3D` | Optional 3D action/camera/props → POSE + guide |
 | `CP_CharacterCaption` | Florence-2 + palette hex → caption / edit_prompt / backend |
 | `CP_BuildEditPrompt` | Assemble caption + palette + props + anti-bones |
 | `CP_ExtractPose` | Image (+ DWPose keypoint) → `POSE` |

@@ -5,14 +5,15 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from ..formats.pose_io import make_pose, scale_pose
+from ..formats.pose_io import load_pose, make_pose, scale_pose
 from ..pose3d.camera import CAMERA_PRESETS, list_camera_presets
 from ..pose3d.from_prompt import PosePromptError, angles_from_text_prompt
 from ..pose3d.presets import list_action_presets
 from ..pose3d.project import compose_pose
-from ..pose3d.props import list_props
+from ..pose3d.props import list_props, prop_hint_text, resolve_props
 from ..utils import content_bbox, draw_openpose, np_to_tensor, tensor_to_np
 from .caption import build_edit_prompt, describe_character
+from .pose import _list_pose_files, _resolve_pose_path
 from .warp import fit_pose_to_source
 
 try:
@@ -322,19 +323,16 @@ class PoseComposer3D:
 
 
 class PoseTransferPrep:
-    """One-stop prep: caption + 3D compose + optional align → guide + prompt."""
+    """Caption + load library ``.pose`` + optional align → guide + edit prompt."""
 
     @classmethod
     def INPUT_TYPES(cls):
-        actions = list_action_presets()
-        cams = list_camera_presets()
         props = list_props()
+        pose_files = _list_pose_files()
         return {
             "required": {
                 "image": ("IMAGE",),
-                "pose_source": (POSE_SOURCES, {"default": "library"}),
-                "action": (actions, {"default": "idle"}),
-                "camera_preset": (cams, {"default": "SE"}),
+                "pose_file": (pose_files,),
                 "prop": (props, {"default": "none"}),
                 "align_to_source": ("BOOLEAN", {"default": True}),
                 "auto_caption": ("BOOLEAN", {"default": True}),
@@ -344,16 +342,11 @@ class PoseTransferPrep:
                 "pose_keypoint": ("POSE_KEYPOINT",),
                 "dwpose_image": ("IMAGE",),
                 "prop2": (props, {"default": "none"}),
-                "yaw": ("FLOAT", {"default": 0.0, "min": -180.0, "max": 180.0, "step": 1.0}),
-                "pitch": ("FLOAT", {"default": 0.0, "min": -60.0, "max": 60.0, "step": 1.0}),
-                "roll": ("FLOAT", {"default": 0.0, "min": -30.0, "max": 30.0, "step": 1.0}),
-                "use_manual_camera": ("BOOLEAN", {"default": False}),
-                "caption_override": ("STRING", {"default": "", "multiline": True}),
-                "extra_prompt": ("STRING", {"default": "", "multiline": True}),
+                "caption": ("STRING", {"default": ""}),
+                "extra": ("STRING", {"default": ""}),
                 "source_pose": ("POSE",),
                 "width": ("INT", {"default": 0, "min": 0, "max": 4096}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 4096}),
-                **_llm_input_types(),
             },
         }
 
@@ -373,64 +366,36 @@ class PoseTransferPrep:
     def prep(
         self,
         image,
-        action="idle",
-        camera_preset="SE",
+        pose_file,
         prop="none",
         align_to_source=True,
         auto_caption=True,
         prop2="none",
-        yaw=0.0,
-        pitch=0.0,
-        roll=0.0,
-        use_manual_camera=False,
-        caption_override="",
-        extra_prompt="",
+        caption="",
+        extra="",
         source_pose=None,
         pose_keypoint=None,
         dwpose_image=None,
         width=0,
         height=0,
-        pose_source="library",
-        pose_prompt="",
-        llm_base_url=_LLM_DEFAULT_BASE,
-        llm_model=_LLM_DEFAULT_MODEL,
-        llm_api_key="",
     ):
         rgb = tensor_to_np(image)
         ih, iw = rgb.shape[:2]
         w = int(width) if width and width > 0 else iw
         h = int(height) if height and height > 0 else ih
 
-        props = []
+        try:
+            path = _resolve_pose_path(pose_file)
+        except FileNotFoundError as e:
+            raise RuntimeError(str(e)) from e
+        pose = scale_pose(load_pose(path), w, h)
+
+        prop_names = []
         if prop and prop != "none":
-            props.append(prop)
+            prop_names.append(prop)
         if prop2 and prop2 != "none":
-            props.append(prop2)
-
-        cam_kwargs = {}
-        if use_manual_camera:
-            cam_kwargs = {"yaw": float(yaw), "pitch": float(pitch), "roll": float(roll)}
-        elif abs(yaw) > 1e-3 or abs(pitch) > 1e-3 or abs(roll) > 1e-3:
-            preset = CAMERA_PRESETS.get(camera_preset.upper(), CAMERA_PRESETS["SE"])
-            cam_kwargs = {
-                "yaw": preset["yaw"] + float(yaw),
-                "pitch": preset["pitch"] + float(pitch),
-                "roll": preset["roll"] + float(roll),
-            }
-
-        action_label, joint_angles = _resolve_compose_angles(
-            pose_source, action, pose_prompt, llm_base_url, llm_model, llm_api_key
-        )
-        result = compose_pose(
-            action_label,
-            camera_preset=camera_preset,
-            width=w,
-            height=h,
-            props=props,
-            joint_angles=joint_angles,
-            **cam_kwargs,
-        )
-        pose = result["pose"]
+            prop_names.append(prop2)
+        hint = prop_hint_text(resolve_props(prop_names)) if prop_names else ""
 
         # Detect / resolve source skeleton (real detection only — no fake T-pose)
         src = source_pose
@@ -445,7 +410,6 @@ class PoseTransferPrep:
         if align_to_source:
             box = content_bbox(rgb)
             if box is not None and (w != iw or h != ih):
-                # Scale content bbox into output canvas coords
                 sx, sy = w / float(iw), h / float(ih)
                 x0, y0, x1, y1 = box
                 box = (
@@ -458,28 +422,24 @@ class PoseTransferPrep:
             pose["width"] = w
             pose["height"] = h
 
-        # preview_pose / guide: output pose only (+ props on guide for generation)
         preview_pose = draw_openpose(pose, width=w, height=h)
         guide = preview_pose.copy()
-        _draw_prop_polylines(guide, result["prop_polylines_2d"])
 
-        # source_pose: sprite + real skeleton (DWPose IMAGE preferred)
         base = _resize_rgb(rgb, w, h)
         source_pose_img = _build_source_pose_preview(
             base, src_pose=src, dwpose_image=dwpose_image
         )
-        _ = det_backend  # available for future debug output
+        _ = det_backend
 
-        # Caption + palette color lock
-        override = (caption_override or "").strip()
+        override = (caption or "").strip()
         if override:
             from .caption import palette_hex_string
 
-            caption = override
+            resolved_caption = override
             palette_hex = palette_hex_string(rgb)
             backend = "override"
         elif auto_caption:
-            caption, palette_hex, backend = describe_character(
+            resolved_caption, palette_hex, backend = describe_character(
                 rgb,
                 style_bias=(
                     "isometric RTS game sprite, hand-painted / pre-rendered, "
@@ -492,14 +452,14 @@ class PoseTransferPrep:
             from .caption import palette_hex_string
 
             palette_hex = palette_hex_string(rgb)
-            caption = "full-body 2D game character sprite, cartoon line art"
+            resolved_caption = "full-body 2D game character sprite, cartoon line art"
             backend = "disabled"
 
         edit_prompt = build_edit_prompt(
-            caption,
+            resolved_caption,
             palette_hex=palette_hex,
-            prop_hint=result["prop_hint"],
-            extra=extra_prompt,
+            prop_hint=hint,
+            extra=extra,
         )
 
         return (
@@ -508,7 +468,7 @@ class PoseTransferPrep:
             pose,
             np_to_tensor(source_pose_img),
             np_to_tensor(preview_pose),
-            caption,
+            resolved_caption,
             backend,
         )
 

@@ -294,30 +294,20 @@
           "slot_index": 6
         }
       ],
-      "title": "Prep (caption + pose 3D + props)",
+      "title": "Prep (caption + pose file)",
       "properties": {
         "Node name for S&R": "CP_PoseTransferPrep"
       },
       "widgets_values": [
-        "library",
-        "idle",
-        "SE",
+        "slow_run_SE_00.pose",
         "sword",
         true,
         true,
         "none",
-        0.0,
-        0.0,
-        0.0,
-        false,
         "",
         "",
         0,
-        0,
-        "",
-        "https://api.openai.com/v1",
-        "gpt-4o-mini",
-        ""
+        0
       ]
     },
     {

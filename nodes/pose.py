@@ -20,6 +20,7 @@ from ..utils import (
 
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 BUILTIN_POSES_DIR = PACKAGE_ROOT / "poses"
+EMPTY_POSE_PLACEHOLDER = "(no .pose files)"
 
 
 def _input_directory() -> Path | None:
@@ -41,6 +42,7 @@ def _output_directory() -> Path | None:
 
 
 def _list_pose_files() -> list[str]:
+    """All ``*.pose`` basenames in package ``poses/`` and ``input/poses/`` (no name filter)."""
     names: list[str] = []
     search_dirs = [BUILTIN_POSES_DIR]
     input_dir = _input_directory()
@@ -54,10 +56,15 @@ def _list_pose_files() -> list[str]:
             rel = p.name
             if rel not in names:
                 names.append(rel)
-    return names or ["idle.pose"]
+    return names or [EMPTY_POSE_PLACEHOLDER]
 
 
 def _resolve_pose_path(filename: str) -> Path:
+    if not filename or filename == EMPTY_POSE_PLACEHOLDER:
+        raise FileNotFoundError(
+            "No .pose files found. Export with mixamo_tools into poses/ "
+            f"(or ComfyUI input/poses/), then refresh the node. Looking under: {BUILTIN_POSES_DIR}"
+        )
     candidates = [
         BUILTIN_POSES_DIR / filename,
         Path(filename),
@@ -133,7 +140,10 @@ class PoseLibraryLoad:
     CATEGORY = "CharacterPose/Pose"
 
     def load(self, pose_file, width=1024, height=1024):
-        path = _resolve_pose_path(pose_file)
+        try:
+            path = _resolve_pose_path(pose_file)
+        except FileNotFoundError as e:
+            raise RuntimeError(str(e)) from e
         pose = load_pose(path)
         pose = scale_pose(pose, width, height)
         return (pose,)

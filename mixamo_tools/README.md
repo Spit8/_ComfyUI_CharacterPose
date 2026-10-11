@@ -1,8 +1,8 @@
 # mixamo_tools
 
-Standalone tooling: **Mixamo FBX → 2D OpenPose skeleton views** at isometric camera angles.
+Standalone tooling: **Mixamo FBX → OpenPose COCO-18 `.pose` + debug PNG** at isometric camera angles.
 
-Not a ComfyUI custom node (yet). Can be split into its own library later.
+Not a ComfyUI custom node (yet). Drop / rename the `.pose` files into the package [`poses/`](../poses/) folder for `CP_PoseLibraryLoad`.
 
 ## Camera labels (French ISO)
 
@@ -36,13 +36,30 @@ Deps: `numpy`, `Pillow`, `pufbx`.
 
 ## Usage
 
-Recommended (local venv):
+By default each sample writes **both** `{stem}_{VIEW}_{ii:02d}.pose` and a debug PNG.
+
+Recommended (local venv) — write into the Comfy pose library folder:
 
 ```powershell
-.\venv\Scripts\python.exe -m export_views --positions 4 --view SE
+.\venv\Scripts\python.exe -m export_views --positions 4 --view SE --out-dir ..\poses
+# → poses/slow_run_SE_00.pose … (+ PNG unless --no-png)
 ```
 
-From the **repo root** (same Python that has the deps):
+Rename files if a workflow expects names like `idle_se.pose` / `run_se_01.pose`.
+
+`.pose` only (no PNG):
+
+```powershell
+.\venv\Scripts\python.exe -m export_views --positions 4 --view SE --no-png --out-dir ..\poses
+```
+
+PNG only (debug):
+
+```powershell
+.\venv\Scripts\python.exe -m export_views --positions 4 --view SE --no-pose
+```
+
+From the **repo root**:
 
 ```bash
 python -m mixamo_tools.export_views --positions 4 --view SE
@@ -53,17 +70,13 @@ From **inside** `mixamo_tools/`:
 
 ```bash
 python -m export_views --positions 4 --view SE
-# or:  python export_views.py --positions 4 --view SE
 ```
-
-→ `mixamo_tools/out/slow_run_SE_00.png` … `slow_run_SE_03.png`  
-(4 evenly spaced frames, same camera framing)
 
 ```bash
 python -m mixamo_tools.export_views --positions 4
 ```
 
-→ 16 PNGs (4 views × 4 positions)
+→ 16 samples × (`.pose` + PNG) for 4 views × 4 positions
 
 ```bash
 python -m mixamo_tools.export_views --frame 11 --view NE
@@ -79,10 +92,12 @@ python -m mixamo_tools.export_views --frame 11 --view NE
 | `--positions N` | `4` | Evenly spaced samples over the clip |
 | `--view` | `ALL` | `SE` / `SO` / `NE` / `NO` / `ALL` |
 | `--frame` | — | Single frame index (overrides `--positions`) |
-| `--out-dir` | `mixamo_tools/out` | Output folder |
+| `--out-dir` | `mixamo_tools/out` | Output folder (use `../poses` for the library) |
 | `--size` | `1024` | Square canvas |
 | `--margin` | `0.10` | Padding when auto-fitting zoom |
 | `--stem` | from FBX name | Filename prefix |
+| `--no-png` | off | Skip debug PNG |
+| `--no-pose` | off | Skip `.pose` JSON |
 
 ## Pipeline
 
@@ -90,4 +105,4 @@ python -m mixamo_tools.export_views --frame 11 --view NE
 2. Sample N frames at equal time steps
 3. Map Mixamo bones → OpenPose COCO-18 (normalized)
 4. Fit one shared camera distance so every sample fits on canvas
-5. Project each (view × position) and draw stick-figure PNGs
+5. Project each (view × position) → write `.pose` (+ optional stick PNG)

@@ -307,30 +307,20 @@
           "slot_index": 6
         }
       ],
-      "title": "Prep: caption + pose 3D + props",
+      "title": "Prep: caption + pose file",
       "properties": {
         "Node name for S&R": "CP_PoseTransferPrep"
       },
       "widgets_values": [
-        "library",
-        "walk_01",
-        "SE",
+        "slow_run_SE_00.pose",
         "none",
         true,
         true,
         "none",
-        0.0,
-        0.0,
-        0.0,
-        false,
         "",
         "",
         0,
-        0,
-        "",
-        "https://api.openai.com/v1",
-        "gpt-4o-mini",
-        ""
+        0
       ]
     },
     {
@@ -1143,7 +1133,7 @@
         "text": ""
       },
       "widgets_values": [
-        "CharacterPose \u2014 Flux.2 Klein (Prep)\n\nDWPreprocessor \u2192 Prep.pose_keypoint + dwpose_image\npour caler le vrai squelette sur source_pose.\nSans DWPose: sprite seul (pas de faux T-pose).\npreview_pose = pose cible seule\nguide = pose + props (ref2 Flux)\n"
+        "CharacterPose \u2014 Flux.2 Klein (Prep)\n\nPrep charge un .pose (Mixamo \u2192 poses/).\nDWPreprocessor \u2192 Prep.pose_keypoint + dwpose_image\npour caler le vrai squelette sur source_pose.\nSans DWPose: sprite seul (pas de faux T-pose).\npreview_pose / guide = pose fichier (ref2 Flux)\n"
       ]
     }
   ],
