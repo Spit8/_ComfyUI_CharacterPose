@@ -68,3 +68,8 @@ temp/
 # OneDrive / Windows noise
 ~$*
 *.lnk
+
+# Mixamo tool generated previews
+mixamo_tools/out/
+mixamo_tools/_probe_*.py
+
