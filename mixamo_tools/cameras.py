@@ -19,6 +19,13 @@ CAMERA_PRESETS: dict[str, dict[str, float]] = {
 
 VIEW_ORDER = ("SE", "SO", "NE", "NO", "LEFT", "RIGHT", "TOP", "BOT")
 
+VIEW_SETS: dict[str, tuple[str, ...]] = {
+    "4_iso": ("SE", "SO", "NE", "NO"),
+    "4_cardinal": ("TOP", "BOT", "LEFT", "RIGHT"),
+    "6": ("SE", "SO", "NE", "NO", "TOP", "BOT"),
+    "8": VIEW_ORDER,
+}
+
 
 def _rot_y(deg: float) -> np.ndarray:
     a = np.deg2rad(deg)

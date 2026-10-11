@@ -13,58 +13,26 @@ def link(lid, src, src_slot, dst, dst_slot, typ):
 
 
 def write_flux_klein():
-    """Flux.2 Klein + CP_PoseTransferPrep — fully wired."""
-    # Node IDs
-    # 1 UNET  2 CLIP  3 VAE  4 LoadImage  5 Prep  6 Preview
-    # 7 CLIPTextEncode(+prompt)  8 ZeroOut
-    # 9 ScaleSprite  10 GetSize  11 VAEEnc1  12 RefLat1
-    # 13 ScaleGuide  14 VAEEnc2  15 RefLat2
-    # 16 EmptyLatent  17 Scheduler  18 CFG  19 SamplerSel  20 Noise
-    # 21 Sampler  22 Decode  23 Save  24 Note
+    """Flux.2 Klein + Prep + sequential CP_KleinPoseBatch."""
+    # 1 UNET  2 CLIP  3 VAE  4 LoadImage  5 Prep
+    # 6 Preview source  7 CP_KleinPoseBatch  8 Preview results  9 Save
+    # 10 Note  25 Preview pose  26 DWPreprocessor
 
     links = [
-        # models
-        link(1, 1, 0, 18, 0, "MODEL"),
-        link(2, 2, 0, 7, 0, "CLIP"),
-        link(3, 3, 0, 11, 1, "VAE"),
-        link(4, 3, 0, 14, 1, "VAE"),
-        link(5, 3, 0, 22, 1, "VAE"),
-        # image / prep
+        link(1, 1, 0, 7, 0, "MODEL"),
+        link(2, 2, 0, 7, 1, "CLIP"),
+        link(3, 3, 0, 7, 2, "VAE"),
         link(6, 4, 0, 5, 0, "IMAGE"),
-        link(33, 4, 0, 26, 0, "IMAGE"),  # sprite -> DWPreprocessor
-        # Prep optional slots: 7=pose_keypoint, 8=dwpose_image (after 7 required)
+        link(33, 4, 0, 26, 0, "IMAGE"),
         link(34, 26, 1, 5, 7, "POSE_KEYPOINT"),
-        link(35, 26, 0, 5, 8, "IMAGE"),  # DWPose sticks IMAGE -> Prep.dwpose_image
-        link(7, 4, 0, 9, 0, "IMAGE"),
-        link(8, 5, 0, 13, 0, "IMAGE"),  # guide -> scale2
-        link(9, 5, 1, 7, 1, "STRING"),  # edit_prompt -> CLIPTextEncode.text
-        link(10, 5, 3, 6, 0, "IMAGE"),  # source_pose -> PreviewImage
-        link(32, 5, 4, 25, 0, "IMAGE"),  # preview_pose -> PreviewImage 2
-        # conditioning chain
-        link(11, 7, 0, 12, 0, "CONDITIONING"),
-        link(12, 7, 0, 8, 0, "CONDITIONING"),
-        link(13, 8, 0, 18, 2, "CONDITIONING"),
-        # sprite encode
-        link(14, 9, 0, 10, 0, "IMAGE"),
-        link(15, 9, 0, 11, 0, "IMAGE"),
-        link(16, 10, 0, 17, 0, "INT"),
-        link(17, 10, 0, 16, 0, "INT"),
-        link(18, 10, 1, 17, 1, "INT"),
-        link(19, 10, 1, 16, 1, "INT"),
-        link(20, 11, 0, 12, 1, "LATENT"),
-        link(21, 12, 0, 15, 0, "CONDITIONING"),
-        # guide encode
-        link(22, 13, 0, 14, 0, "IMAGE"),
-        link(23, 14, 0, 15, 1, "LATENT"),
-        link(24, 15, 0, 18, 1, "CONDITIONING"),
-        # sample
-        link(25, 16, 0, 21, 4, "LATENT"),
-        link(26, 17, 0, 21, 3, "SIGMAS"),
-        link(27, 18, 0, 21, 1, "GUIDER"),
-        link(28, 19, 0, 21, 2, "SAMPLER"),
-        link(29, 20, 0, 21, 0, "NOISE"),
-        link(30, 21, 0, 22, 0, "LATENT"),
-        link(31, 22, 0, 23, 0, "IMAGE"),
+        link(35, 26, 0, 5, 8, "IMAGE"),
+        link(7, 5, 9, 7, 3, "IMAGE"),  # image_batch
+        link(8, 5, 0, 7, 4, "IMAGE"),  # guide
+        link(9, 5, 7, 7, 5, "STRING"),  # edit_prompts
+        link(10, 5, 3, 6, 0, "IMAGE"),  # source_pose preview
+        link(32, 5, 4, 25, 0, "IMAGE"),  # preview_pose
+        link(11, 7, 0, 9, 0, "IMAGE"),  # results -> Save
+        link(12, 7, 0, 8, 0, "IMAGE"),  # results -> Preview
     ]
 
     def outs(nid):
@@ -182,12 +150,7 @@ def write_flux_klein():
             "mode": 0,
             "inputs": [{"name": "image", "type": "IMAGE", "link": inp(26, 0)}],
             "outputs": [
-                {
-                    "name": "IMAGE",
-                    "type": "IMAGE",
-                    "links": o[26].get(0),
-                    "slot_index": 0,
-                },
+                {"name": "IMAGE", "type": "IMAGE", "links": o[26].get(0), "slot_index": 0},
                 {
                     "name": "POSE_KEYPOINT",
                     "type": "POSE_KEYPOINT",
@@ -217,32 +180,78 @@ def write_flux_klein():
             "mode": 0,
             "inputs": [
                 {"name": "image", "type": "IMAGE", "link": inp(5, 0)},
+                {"name": "animation", "type": "COMBO", "widget": {"name": "animation"}, "link": None},
+                {"name": "orientation", "type": "COMBO", "widget": {"name": "orientation"}, "link": None},
+                {"name": "frame", "type": "COMBO", "widget": {"name": "frame"}, "link": None},
+                {"name": "prop", "type": "COMBO", "widget": {"name": "prop"}, "link": None},
+                {
+                    "name": "align_to_source",
+                    "type": "BOOLEAN",
+                    "widget": {"name": "align_to_source"},
+                    "link": None,
+                },
+                {
+                    "name": "auto_caption",
+                    "type": "BOOLEAN",
+                    "widget": {"name": "auto_caption"},
+                    "link": None,
+                },
                 {"name": "pose_keypoint", "type": "POSE_KEYPOINT", "link": inp(5, 7)},
                 {"name": "dwpose_image", "type": "IMAGE", "link": inp(5, 8)},
+                {"name": "prop2", "type": "COMBO", "widget": {"name": "prop2"}, "link": None},
+                {"name": "caption", "type": "STRING", "widget": {"name": "caption"}, "link": None},
+                {"name": "extra", "type": "STRING", "widget": {"name": "extra"}, "link": None},
                 {"name": "source_pose", "type": "POSE", "link": None},
+                {"name": "pose_list", "type": "STRING", "widget": {"name": "pose_list"}, "link": None},
+                {"name": "pose_file", "type": "STRING", "widget": {"name": "pose_file"}, "link": None},
+                {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": None},
+                {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": None},
             ],
             "outputs": [
                 {"name": "guide", "type": "IMAGE", "links": o[5].get(0), "slot_index": 0},
-                {"name": "edit_prompt", "type": "STRING", "links": o[5].get(1), "slot_index": 1},
+                {"name": "edit_prompt", "type": "STRING", "links": None, "slot_index": 1},
                 {"name": "pose", "type": "POSE", "links": None, "slot_index": 2},
                 {"name": "source_pose", "type": "IMAGE", "links": o[5].get(3), "slot_index": 3},
                 {"name": "preview_pose", "type": "IMAGE", "links": o[5].get(4), "slot_index": 4},
                 {"name": "caption", "type": "STRING", "links": None, "slot_index": 5},
                 {"name": "caption_backend", "type": "STRING", "links": None, "slot_index": 6},
+                {"name": "edit_prompts", "type": "STRING", "links": o[5].get(7), "slot_index": 7},
+                {"name": "pose_names", "type": "STRING", "links": None, "slot_index": 8},
+                {"name": "image_batch", "type": "IMAGE", "links": o[5].get(9), "slot_index": 9},
+                {"name": "count", "type": "INT", "links": None, "slot_index": 10},
             ],
-            "title": "Prep: caption + pose file",
+            "title": "Prep: filters -> guide batch",
             "properties": {"Node name for S&R": "CP_PoseTransferPrep"},
             "widgets_values": [
-                "slow_run_SE_00.pose",
+                "ALL",
+                "ALL",
+                "ALL",
                 "none",
                 True,
                 True,
                 "none",
+                "",
+                "",
                 "",
                 "",
                 0,
                 0,
             ],
+            "widgets_values_named": {
+                "animation": "ALL",
+                "orientation": "ALL",
+                "frame": "ALL",
+                "prop": "none",
+                "align_to_source": True,
+                "auto_caption": True,
+                "prop2": "none",
+                "caption": "",
+                "extra": "",
+                "pose_list": "",
+                "pose_file": "",
+                "width": 0,
+                "height": 0,
+            },
         },
         {
             "id": 6,
@@ -274,339 +283,104 @@ def write_flux_klein():
         },
         {
             "id": 7,
-            "type": "CLIPTextEncode",
-            "pos": [840, 40],
-            "size": [520, 160],
+            "type": "CP_KleinPoseBatch",
+            "pos": [840, 80],
+            "size": [360, 320],
             "flags": {},
             "order": 7,
             "mode": 0,
             "inputs": [
-                {"name": "clip", "type": "CLIP", "link": inp(7, 0)},
-                {"name": "text", "type": "STRING", "link": inp(7, 1), "widget": {"name": "text"}},
+                {"name": "model", "type": "MODEL", "link": inp(7, 0)},
+                {"name": "clip", "type": "CLIP", "link": inp(7, 1)},
+                {"name": "vae", "type": "VAE", "link": inp(7, 2)},
+                {"name": "image_batch", "type": "IMAGE", "link": inp(7, 3)},
+                {"name": "guide", "type": "IMAGE", "link": inp(7, 4)},
+                # forceInput: socket only — do NOT declare a widget (avoids widgets_values shift)
+                {"name": "edit_prompts", "type": "STRING", "link": inp(7, 5)},
+                {"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": None},
+                {"name": "steps", "type": "INT", "widget": {"name": "steps"}, "link": None},
+                {"name": "cfg", "type": "FLOAT", "widget": {"name": "cfg"}, "link": None},
+                {
+                    "name": "sampler_name",
+                    "type": "COMBO",
+                    "widget": {"name": "sampler_name"},
+                    "link": None,
+                },
+                {
+                    "name": "megapixels",
+                    "type": "FLOAT",
+                    "widget": {"name": "megapixels"},
+                    "link": None,
+                },
+                {
+                    "name": "filename_prefix",
+                    "type": "STRING",
+                    "widget": {"name": "filename_prefix"},
+                    "link": None,
+                },
             ],
             "outputs": [
-                {
-                    "name": "CONDITIONING",
-                    "type": "CONDITIONING",
-                    "links": o[7].get(0),
-                    "slot_index": 0,
-                }
+                {"name": "images", "type": "IMAGE", "links": o[7].get(0), "slot_index": 0},
+                {"name": "count", "type": "INT", "links": None, "slot_index": 1},
             ],
-            "title": "Prompt auto (depuis Prep)",
-            "properties": {"Node name for S&R": "CLIPTextEncode"},
-            "widgets_values": [""],
+            "title": "Klein batch (sequential, progressive preview)",
+            "properties": {"Node name for S&R": "CP_KleinPoseBatch"},
+            # Order must match widget slots: seed, steps, cfg, sampler_name, megapixels, prefix
+            "widgets_values": [42, 4, 1.0, "euler", 1.0, "pose_transfer_flux_klein"],
+            "widgets_values_named": {
+                "seed": 42,
+                "steps": 4,
+                "cfg": 1.0,
+                "sampler_name": "euler",
+                "megapixels": 1.0,
+                "filename_prefix": "pose_transfer_flux_klein",
+            },
         },
         {
             "id": 8,
-            "type": "ConditioningZeroOut",
-            "pos": [1400, 40],
-            "size": [240, 46],
+            "type": "PreviewImage",
+            "pos": [1260, 80],
+            "size": [360, 360],
             "flags": {},
             "order": 8,
             "mode": 0,
-            "inputs": [{"name": "conditioning", "type": "CONDITIONING", "link": inp(8, 0)}],
-            "outputs": [
-                {
-                    "name": "CONDITIONING",
-                    "type": "CONDITIONING",
-                    "links": o[8].get(0),
-                    "slot_index": 0,
-                }
-            ],
-            "properties": {"Node name for S&R": "ConditioningZeroOut"},
+            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(8, 0)}],
+            "outputs": [],
+            "title": "Results (batch final)",
+            "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
         {
             "id": 9,
-            "type": "ImageScaleToTotalPixels",
-            "pos": [840, 280],
-            "size": [300, 106],
+            "type": "SaveImage",
+            "pos": [1260, 480],
+            "size": [360, 300],
             "flags": {},
             "order": 9,
             "mode": 0,
-            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(9, 0)}],
-            "outputs": [
-                {"name": "IMAGE", "type": "IMAGE", "links": o[9].get(0), "slot_index": 0}
-            ],
-            "title": "Scale ref 1 (sprite)",
-            "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
-            "widgets_values": ["lanczos", 1.0, 64],
+            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(9, 0)}],
+            "outputs": [],
+            "properties": {"Node name for S&R": "SaveImage"},
+            "widgets_values": ["pose_transfer_flux_klein_all"],
         },
         {
             "id": 10,
-            "type": "GetImageSize",
-            "pos": [1180, 280],
-            "size": [210, 66],
-            "flags": {},
-            "order": 10,
-            "mode": 0,
-            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(10, 0)}],
-            "outputs": [
-                {"name": "width", "type": "INT", "links": o[10].get(0), "slot_index": 0},
-                {"name": "height", "type": "INT", "links": o[10].get(1), "slot_index": 1},
-                {"name": "batch_size", "type": "INT", "links": None, "slot_index": 2},
-            ],
-            "properties": {"Node name for S&R": "GetImageSize"},
-            "widgets_values": [],
-        },
-        {
-            "id": 11,
-            "type": "VAEEncode",
-            "pos": [1180, 380],
-            "size": [210, 46],
-            "flags": {},
-            "order": 11,
-            "mode": 0,
-            "inputs": [
-                {"name": "pixels", "type": "IMAGE", "link": inp(11, 0)},
-                {"name": "vae", "type": "VAE", "link": inp(11, 1)},
-            ],
-            "outputs": [
-                {"name": "LATENT", "type": "LATENT", "links": o[11].get(0), "slot_index": 0}
-            ],
-            "title": "Encode ref 1",
-            "properties": {"Node name for S&R": "VAEEncode"},
-            "widgets_values": [],
-        },
-        {
-            "id": 12,
-            "type": "ReferenceLatent",
-            "pos": [1400, 140],
-            "size": [260, 46],
-            "flags": {},
-            "order": 12,
-            "mode": 0,
-            "inputs": [
-                {"name": "conditioning", "type": "CONDITIONING", "link": inp(12, 0)},
-                {"name": "latent", "type": "LATENT", "link": inp(12, 1)},
-            ],
-            "outputs": [
-                {
-                    "name": "CONDITIONING",
-                    "type": "CONDITIONING",
-                    "links": o[12].get(0),
-                    "slot_index": 0,
-                }
-            ],
-            "title": "Ref latent 1 (sprite)",
-            "properties": {"Node name for S&R": "ReferenceLatent"},
-            "widgets_values": [],
-        },
-        {
-            "id": 13,
-            "type": "ImageScaleToTotalPixels",
-            "pos": [840, 520],
-            "size": [300, 106],
-            "flags": {},
-            "order": 13,
-            "mode": 0,
-            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(13, 0)}],
-            "outputs": [
-                {"name": "IMAGE", "type": "IMAGE", "links": o[13].get(0), "slot_index": 0}
-            ],
-            "title": "Scale ref 2 (guide pose)",
-            "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
-            "widgets_values": ["lanczos", 1.0, 64],
-        },
-        {
-            "id": 14,
-            "type": "VAEEncode",
-            "pos": [1180, 520],
-            "size": [210, 46],
-            "flags": {},
-            "order": 14,
-            "mode": 0,
-            "inputs": [
-                {"name": "pixels", "type": "IMAGE", "link": inp(14, 0)},
-                {"name": "vae", "type": "VAE", "link": inp(14, 1)},
-            ],
-            "outputs": [
-                {"name": "LATENT", "type": "LATENT", "links": o[14].get(0), "slot_index": 0}
-            ],
-            "title": "Encode ref 2",
-            "properties": {"Node name for S&R": "VAEEncode"},
-            "widgets_values": [],
-        },
-        {
-            "id": 15,
-            "type": "ReferenceLatent",
-            "pos": [1700, 140],
-            "size": [260, 46],
-            "flags": {},
-            "order": 15,
-            "mode": 0,
-            "inputs": [
-                {"name": "conditioning", "type": "CONDITIONING", "link": inp(15, 0)},
-                {"name": "latent", "type": "LATENT", "link": inp(15, 1)},
-            ],
-            "outputs": [
-                {
-                    "name": "CONDITIONING",
-                    "type": "CONDITIONING",
-                    "links": o[15].get(0),
-                    "slot_index": 0,
-                }
-            ],
-            "title": "Ref latent 2 (guide)",
-            "properties": {"Node name for S&R": "ReferenceLatent"},
-            "widgets_values": [],
-        },
-        {
-            "id": 16,
-            "type": "EmptyFlux2LatentImage",
-            "pos": [1700, 280],
-            "size": [270, 106],
-            "flags": {},
-            "order": 16,
-            "mode": 0,
-            "inputs": [
-                {"name": "width", "type": "INT", "link": inp(16, 0), "widget": {"name": "width"}},
-                {"name": "height", "type": "INT", "link": inp(16, 1), "widget": {"name": "height"}},
-            ],
-            "outputs": [
-                {"name": "LATENT", "type": "LATENT", "links": o[16].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "EmptyFlux2LatentImage"},
-            "widgets_values": [1024, 1024, 1],
-        },
-        {
-            "id": 17,
-            "type": "Flux2Scheduler",
-            "pos": [1700, 420],
-            "size": [270, 106],
-            "flags": {},
-            "order": 17,
-            "mode": 0,
-            "inputs": [
-                {"name": "width", "type": "INT", "link": inp(17, 0), "widget": {"name": "width"}},
-                {"name": "height", "type": "INT", "link": inp(17, 1), "widget": {"name": "height"}},
-            ],
-            "outputs": [
-                {"name": "SIGMAS", "type": "SIGMAS", "links": o[17].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "Flux2Scheduler"},
-            "widgets_values": [4, 1024, 1024],
-        },
-        {
-            "id": 18,
-            "type": "CFGGuider",
-            "pos": [2000, 40],
-            "size": [270, 98],
-            "flags": {},
-            "order": 18,
-            "mode": 0,
-            "inputs": [
-                {"name": "model", "type": "MODEL", "link": inp(18, 0)},
-                {"name": "positive", "type": "CONDITIONING", "link": inp(18, 1)},
-                {"name": "negative", "type": "CONDITIONING", "link": inp(18, 2)},
-            ],
-            "outputs": [
-                {"name": "GUIDER", "type": "GUIDER", "links": o[18].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "CFGGuider"},
-            "widgets_values": [1.0],
-        },
-        {
-            "id": 19,
-            "type": "KSamplerSelect",
-            "pos": [2000, 180],
-            "size": [270, 58],
-            "flags": {},
-            "order": 19,
-            "mode": 0,
-            "inputs": [],
-            "outputs": [
-                {"name": "SAMPLER", "type": "SAMPLER", "links": o[19].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "KSamplerSelect"},
-            "widgets_values": ["euler"],
-        },
-        {
-            "id": 20,
-            "type": "RandomNoise",
-            "pos": [2000, 280],
-            "size": [270, 82],
-            "flags": {},
-            "order": 20,
-            "mode": 0,
-            "inputs": [],
-            "outputs": [
-                {"name": "NOISE", "type": "NOISE", "links": o[20].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "RandomNoise"},
-            "widgets_values": [42, "randomize"],
-        },
-        {
-            "id": 21,
-            "type": "SamplerCustomAdvanced",
-            "pos": [2320, 120],
-            "size": [280, 106],
-            "flags": {},
-            "order": 21,
-            "mode": 0,
-            "inputs": [
-                {"name": "noise", "type": "NOISE", "link": inp(21, 0)},
-                {"name": "guider", "type": "GUIDER", "link": inp(21, 1)},
-                {"name": "sampler", "type": "SAMPLER", "link": inp(21, 2)},
-                {"name": "sigmas", "type": "SIGMAS", "link": inp(21, 3)},
-                {"name": "latent_image", "type": "LATENT", "link": inp(21, 4)},
-            ],
-            "outputs": [
-                {"name": "output", "type": "LATENT", "links": o[21].get(0), "slot_index": 0},
-                {"name": "denoised_output", "type": "LATENT", "links": None, "slot_index": 1},
-            ],
-            "properties": {"Node name for S&R": "SamplerCustomAdvanced"},
-            "widgets_values": [],
-        },
-        {
-            "id": 22,
-            "type": "VAEDecode",
-            "pos": [2640, 120],
-            "size": [220, 46],
-            "flags": {},
-            "order": 22,
-            "mode": 0,
-            "inputs": [
-                {"name": "samples", "type": "LATENT", "link": inp(22, 0)},
-                {"name": "vae", "type": "VAE", "link": inp(22, 1)},
-            ],
-            "outputs": [
-                {"name": "IMAGE", "type": "IMAGE", "links": o[22].get(0), "slot_index": 0}
-            ],
-            "properties": {"Node name for S&R": "VAEDecode"},
-            "widgets_values": [],
-        },
-        {
-            "id": 23,
-            "type": "SaveImage",
-            "pos": [2640, 220],
-            "size": [360, 400],
-            "flags": {},
-            "order": 23,
-            "mode": 0,
-            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(23, 0)}],
-            "outputs": [],
-            "properties": {"Node name for S&R": "SaveImage"},
-            "widgets_values": ["pose_transfer_flux_klein"],
-        },
-        {
-            "id": 24,
             "type": "Note",
             "pos": [40, 760],
             "size": [340, 280],
             "flags": {},
-            "order": 24,
+            "order": 10,
             "mode": 0,
             "inputs": [],
             "outputs": [],
             "properties": {"text": ""},
             "widgets_values": [
                 "CharacterPose — Flux.2 Klein (Prep)\n\n"
-                "DWPreprocessor → Prep.pose_keypoint + dwpose_image\n"
-                "pour caler le vrai squelette sur source_pose.\n"
-                "Sans DWPose: sprite seul (pas de faux T-pose).\n"
-                "preview_pose = pose cible seule\n"
-                "guide = pose + props (ref2 Flux)\n"
+                "1 Queue = N poses SEQUENTIELLES.\n"
+                "Chaque pose: son edit_prompt + guide.\n"
+                "Preview/save au fur et a mesure\n"
+                "(prefix_000, prefix_001, …).\n"
+                "Redemarrer Comfy apres update nodes.\n"
             ],
         },
     ]
@@ -635,8 +409,8 @@ def write_flux_klein():
             },
             {
                 "id": 3,
-                "title": "Sampler Flux.2",
-                "bounding": [1660, 0, 1380, 520],
+                "title": "Klein sequential batch",
+                "bounding": [820, 0, 860, 820],
                 "color": "#3f789e",
                 "font_size": 24,
                 "flags": {},
@@ -646,8 +420,8 @@ def write_flux_klein():
         "extra": {
             "info": {
                 "name": "CharacterPose — Flux.2 Klein Pose Transfer (Prep)",
-                "version": "0.5.1",
-                "description": "Fully wired: Prep → dual ReferenceLatent Flux Klein.",
+                "version": "0.6.0",
+                "description": "Prep filters → CP_KleinPoseBatch (per-prompt sequential + progressive preview).",
             }
         },
         "models": [

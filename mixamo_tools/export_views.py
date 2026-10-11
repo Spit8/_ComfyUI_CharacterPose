@@ -21,6 +21,7 @@ from formats.pose_io import make_pose, save_pose  # noqa: E402
 from mixamo_tools.cameras import (  # noqa: E402
     CAMERA_PRESETS,
     VIEW_ORDER,
+    VIEW_SETS,
     fit_camera_distance,
     project_joints,
 )
@@ -71,12 +72,18 @@ def sample_frame_indices(n_frames: int, positions: int) -> list[int]:
 
 
 def resolve_views(view: str) -> list[str]:
-    v = view.strip().upper()
+    raw = view.strip()
+    key = raw.lower()
+    if key in VIEW_SETS:
+        return list(VIEW_SETS[key])
+    v = raw.upper()
     if v in ("ALL", "*"):
         return list(VIEW_ORDER)
     if v not in CAMERA_PRESETS:
+        sets = "|".join(VIEW_SETS)
         raise ValueError(
-            f"Unknown view {view!r}; expected SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|ALL"
+            f"Unknown view {view!r}; expected SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|"
+            f"{sets}|ALL"
         )
     return [v]
 
@@ -198,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         "--view",
         type=str,
         default="ALL",
-        help="SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|ALL (default: ALL)",
+        help="SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|4_iso|4_cardinal|6|8|ALL (default: ALL)",
     )
     p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="Output directory")
     p.add_argument(

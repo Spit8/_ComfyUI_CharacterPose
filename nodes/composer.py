@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
+
 import numpy as np
-import torch
 
 from ..formats.pose_io import load_pose, make_pose, scale_pose, scale_pose_letterbox
 from ..pose3d.camera import CAMERA_PRESETS, list_camera_presets
@@ -11,14 +12,22 @@ from ..pose3d.from_prompt import PosePromptError, angles_from_text_prompt
 from ..pose3d.presets import list_action_presets
 from ..pose3d.project import compose_pose
 from ..pose3d.props import list_props, prop_hint_text, resolve_props
-from ..utils import content_bbox, draw_openpose, np_to_tensor, tensor_to_np
+from ..utils import batch_np_to_tensor, content_bbox, draw_openpose, np_to_tensor, tensor_to_np
 from .caption import (
     build_edit_prompt,
     describe_character,
     resolve_view_code,
     view_hint_text,
 )
-from .pose import _list_pose_files, _resolve_pose_path
+from .pose import (
+    ALL_FILTER,
+    filter_pose_entries,
+    list_animations,
+    list_frames_present,
+    list_views_present,
+    poses_dir_fingerprint,
+    _resolve_pose_path,
+)
 from .warp import fit_pose_to_source
 
 try:
@@ -328,16 +337,17 @@ class PoseComposer3D:
 
 
 class PoseTransferPrep:
-    """Caption + load library ``.pose`` + optional align → guide + edit prompt."""
+    """Caption + filtered library poses → guide batch + edit prompts."""
 
     @classmethod
     def INPUT_TYPES(cls):
         props = list_props()
-        pose_files = _list_pose_files()
         return {
             "required": {
                 "image": ("IMAGE",),
-                "pose_file": (pose_files,),
+                "animation": (list_animations(), {"default": ALL_FILTER}),
+                "orientation": (list_views_present(), {"default": ALL_FILTER}),
+                "frame": (list_frames_present(), {"default": ALL_FILTER}),
                 "prop": (props, {"default": "none"}),
                 "align_to_source": ("BOOLEAN", {"default": True}),
                 "auto_caption": ("BOOLEAN", {"default": True}),
@@ -350,12 +360,28 @@ class PoseTransferPrep:
                 "caption": ("STRING", {"default": ""}),
                 "extra": ("STRING", {"default": ""}),
                 "source_pose": ("POSE",),
+                "pose_list": ("STRING", {"default": "", "multiline": True}),
+                # Slot placeholder (ignored): keeps widget order so old workflows
+                # do not feed a former .pose combo value into width/height.
+                "pose_file": ("STRING", {"default": ""}),
                 "width": ("INT", {"default": 0, "min": 0, "max": 4096}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 4096}),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "STRING", "POSE", "IMAGE", "IMAGE", "STRING", "STRING")
+    RETURN_TYPES = (
+        "IMAGE",
+        "STRING",
+        "POSE",
+        "IMAGE",
+        "IMAGE",
+        "STRING",
+        "STRING",
+        "STRING",
+        "STRING",
+        "IMAGE",
+        "INT",
+    )
     RETURN_NAMES = (
         "guide",
         "edit_prompt",
@@ -364,14 +390,21 @@ class PoseTransferPrep:
         "preview_pose",
         "caption",
         "caption_backend",
+        "edit_prompts",
+        "pose_names",
+        "image_batch",
+        "count",
     )
     FUNCTION = "prep"
     CATEGORY = "CharacterPose/Pose"
 
-    def prep(
-        self,
+    @classmethod
+    def IS_CHANGED(
+        cls,
         image,
-        pose_file,
+        animation=ALL_FILTER,
+        orientation=ALL_FILTER,
+        frame=ALL_FILTER,
         prop="none",
         align_to_source=True,
         auto_caption=True,
@@ -381,19 +414,55 @@ class PoseTransferPrep:
         source_pose=None,
         pose_keypoint=None,
         dwpose_image=None,
+        pose_list="",
+        pose_file="",
         width=0,
         height=0,
     ):
+        _ = pose_file
+        return (
+            f"{poses_dir_fingerprint(pose_list)}|{animation}|{orientation}|{frame}|"
+            f"{align_to_source}|{auto_caption}|{prop}|{prop2}|{caption}|{extra}"
+        )
+
+    def prep(
+        self,
+        image,
+        animation=ALL_FILTER,
+        orientation=ALL_FILTER,
+        frame=ALL_FILTER,
+        prop="none",
+        align_to_source=True,
+        auto_caption=True,
+        prop2="none",
+        caption="",
+        extra="",
+        source_pose=None,
+        pose_keypoint=None,
+        dwpose_image=None,
+        pose_list="",
+        pose_file="",
+        width=0,
+        height=0,
+    ):
+        _ = pose_file  # legacy widget slot only — selection is via filters / pose_list
         rgb = tensor_to_np(image)
         ih, iw = rgb.shape[:2]
         w = int(width) if width and width > 0 else iw
         h = int(height) if height and height > 0 else ih
 
-        try:
-            path = _resolve_pose_path(pose_file)
-        except FileNotFoundError as e:
-            raise RuntimeError(str(e)) from e
-        pose = scale_pose_letterbox(load_pose(path), w, h)
+        entries = filter_pose_entries(
+            animation=animation,
+            orientation=orientation,
+            frame=frame,
+            pose_list=pose_list or None,
+        )
+        if not entries:
+            raise RuntimeError(
+                "No .pose files match the Prep filters "
+                f"(animation={animation!r}, orientation={orientation!r}, frame={frame!r}). "
+                "Run CP_MixamoPoseExport or drop files into poses/."
+            )
 
         prop_names = []
         if prop and prop != "none":
@@ -402,7 +471,6 @@ class PoseTransferPrep:
             prop_names.append(prop2)
         hint = prop_hint_text(resolve_props(prop_names)) if prop_names else ""
 
-        # Detect / resolve source skeleton (real detection only — no fake T-pose)
         src = source_pose
         det_backend = "injected" if src is not None else "none"
         if src is None:
@@ -412,6 +480,7 @@ class PoseTransferPrep:
         if src is not None and (src.get("width") != w or src.get("height") != h):
             src = scale_pose(src, w, h)
 
+        box = None
         if align_to_source:
             box = content_bbox(rgb)
             if box is not None and (w != iw or h != ih):
@@ -423,12 +492,6 @@ class PoseTransferPrep:
                     int(round(x1 * sx)),
                     int(round(y1 * sy)),
                 )
-            pose = fit_pose_to_source(pose, src, content_box=box)
-            pose["width"] = w
-            pose["height"] = h
-
-        preview_pose = draw_openpose(pose, width=w, height=h)
-        guide = preview_pose.copy()
 
         base = _resize_rgb(rgb, w, h)
         source_pose_img = _build_source_pose_preview(
@@ -460,25 +523,59 @@ class PoseTransferPrep:
             resolved_caption = "full-body 2D game character sprite, cartoon line art"
             backend = "disabled"
 
-        view_code = resolve_view_code(pose, pose_file=pose_file)
-        vhint = view_hint_text(view_code)
-        edit_prompt = build_edit_prompt(
-            resolved_caption,
-            palette_hex=palette_hex,
-            prop_hint=hint,
-            extra=extra,
-            view_hint=vhint,
-            view_code=view_code,
-        )
+        guides: list[np.ndarray] = []
+        prompts: list[str] = []
+        names: list[str] = []
+        first_pose = None
+        first_preview = None
+
+        for entry in entries:
+            fname = entry["filename"]
+            try:
+                path = _resolve_pose_path(fname)
+            except FileNotFoundError as e:
+                raise RuntimeError(str(e)) from e
+            pose = scale_pose_letterbox(load_pose(path), w, h)
+            if align_to_source:
+                pose = fit_pose_to_source(pose, src, content_box=box)
+                pose["width"] = w
+                pose["height"] = h
+            preview = draw_openpose(pose, width=w, height=h)
+            view_code = resolve_view_code(pose, pose_file=fname)
+            vhint = view_hint_text(view_code)
+            prompts.append(
+                build_edit_prompt(
+                    resolved_caption,
+                    palette_hex=palette_hex,
+                    prop_hint=hint,
+                    extra=extra,
+                    view_hint=vhint,
+                    view_code=view_code,
+                )
+            )
+            guides.append(preview)
+            names.append(fname)
+            if first_pose is None:
+                first_pose = pose
+                first_preview = preview
+
+        n = len(guides)
+        guide_t = batch_np_to_tensor(guides)
+        # Sprite repeated N times so ref1 batch matches guide / latent batch
+        image_batch = batch_np_to_tensor([base] * n)
 
         return (
-            np_to_tensor(guide),
-            edit_prompt,
-            pose,
+            guide_t,
+            prompts[0],
+            first_pose,
             np_to_tensor(source_pose_img),
-            np_to_tensor(preview_pose),
+            np_to_tensor(first_preview),
             resolved_caption,
             backend,
+            json.dumps(prompts, ensure_ascii=False),
+            "\n".join(names),
+            image_batch,
+            n,
         )
 
 

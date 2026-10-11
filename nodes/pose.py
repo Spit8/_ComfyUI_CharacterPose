@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import re
 from pathlib import Path
+from typing import Any
 
 try:
     import folder_paths
@@ -21,6 +24,13 @@ from ..utils import (
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent
 BUILTIN_POSES_DIR = PACKAGE_ROOT / "poses"
 EMPTY_POSE_PLACEHOLDER = "(no .pose files)"
+ALL_FILTER = "ALL"
+_VIEW_CODES = ("SE", "SO", "NE", "NO", "LEFT", "RIGHT", "TOP", "BOT")
+_VIEW_ORDER_INDEX = {v: i for i, v in enumerate(_VIEW_CODES)}
+_POSE_NAME_RE = re.compile(
+    r"^(?P<anim>.+)_(?P<view>SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT)_(?P<frame>\d{2})$",
+    re.IGNORECASE,
+)
 
 
 def _input_directory() -> Path | None:
@@ -77,6 +87,165 @@ def _resolve_pose_path(filename: str) -> Path:
         if c.exists():
             return c
     raise FileNotFoundError(f"Pose file not found: {filename}")
+
+
+def parse_pose_filename(name: str) -> tuple[str, str, int] | None:
+    """Parse ``{anim}_{VIEW}_{ii}.pose`` → (anim, VIEW, frame_idx) or None."""
+    stem = Path(str(name)).stem
+    m = _POSE_NAME_RE.match(stem)
+    if not m:
+        return None
+    return m.group("anim"), m.group("view").upper(), int(m.group("frame"))
+
+
+def _pose_search_dirs() -> list[Path]:
+    dirs = [BUILTIN_POSES_DIR]
+    input_dir = _input_directory()
+    if input_dir is not None:
+        dirs.append(input_dir / "poses")
+    return dirs
+
+
+_POSE_COMBO_CACHE: dict[str, tuple[str, list[str]]] = {}
+
+
+def list_pose_index(
+    pose_list: str | None = None,
+) -> list[dict[str, Any]]:
+    """Indexed library entries: filename, anim, view, frame, mtime."""
+    try:
+        names: list[str] = []
+        if pose_list and str(pose_list).strip():
+            for line in str(pose_list).splitlines():
+                n = line.strip()
+                if not n or n.startswith("#"):
+                    continue
+                if not n.endswith(".pose"):
+                    n = f"{n}.pose"
+                if n not in names:
+                    names.append(n)
+        else:
+            names = [n for n in _list_pose_files() if n != EMPTY_POSE_PLACEHOLDER]
+
+        entries: list[dict[str, Any]] = []
+        for name in names:
+            parsed = parse_pose_filename(name)
+            if parsed is None:
+                continue
+            anim, view, frame = parsed
+            mtime = 0.0
+            try:
+                mtime = _resolve_pose_path(name).stat().st_mtime
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
+            entries.append(
+                {
+                    "filename": name,
+                    "anim": anim,
+                    "view": view,
+                    "frame": frame,
+                    "frame_key": f"{frame:02d}",
+                    "mtime": mtime,
+                }
+            )
+
+        entries.sort(
+            key=lambda e: (
+                e["anim"],
+                _VIEW_ORDER_INDEX.get(e["view"], 99),
+                e["frame"],
+                e["filename"],
+            )
+        )
+        return entries
+    except Exception:
+        return []
+
+
+def _cached_combo(kind: str, builder, pose_list: str | None = None) -> list[str]:
+    """Cache combo lists by fingerprint; never raise (INPUT_TYPES must be safe)."""
+    try:
+        fp = poses_dir_fingerprint(pose_list)
+        key = f"{kind}|{pose_list or ''}"
+        hit = _POSE_COMBO_CACHE.get(key)
+        if hit is not None and hit[0] == fp:
+            return hit[1]
+        values = builder()
+        _POSE_COMBO_CACHE[key] = (fp, values)
+        return values
+    except Exception:
+        return [ALL_FILTER]
+
+
+def list_animations(pose_list: str | None = None) -> list[str]:
+    def _build() -> list[str]:
+        anims = sorted({e["anim"] for e in list_pose_index(pose_list)})
+        return [ALL_FILTER] + anims if anims else [ALL_FILTER]
+
+    return _cached_combo("anim", _build, pose_list)
+
+
+def list_views_present(pose_list: str | None = None) -> list[str]:
+    def _build() -> list[str]:
+        present = {e["view"] for e in list_pose_index(pose_list)}
+        ordered = [v for v in _VIEW_CODES if v in present]
+        return [ALL_FILTER] + ordered if ordered else [ALL_FILTER] + list(_VIEW_CODES)
+
+    return _cached_combo("view", _build, pose_list)
+
+
+def list_frames_present(pose_list: str | None = None) -> list[str]:
+    def _build() -> list[str]:
+        frames = sorted({e["frame_key"] for e in list_pose_index(pose_list)})
+        return [ALL_FILTER] + frames if frames else [ALL_FILTER]
+
+    return _cached_combo("frame", _build, pose_list)
+
+
+def filter_pose_entries(
+    *,
+    animation: str = ALL_FILTER,
+    orientation: str = ALL_FILTER,
+    frame: str = ALL_FILTER,
+    pose_list: str | None = None,
+) -> list[dict[str, Any]]:
+    """Filter index by animation / orientation / frame (ALL = no filter)."""
+    anim_f = (animation or ALL_FILTER).strip()
+    view_f = (orientation or ALL_FILTER).strip().upper()
+    frame_f = (frame or ALL_FILTER).strip()
+    if frame_f != ALL_FILTER and frame_f.isdigit():
+        frame_f = f"{int(frame_f):02d}"
+
+    out: list[dict[str, Any]] = []
+    for e in list_pose_index(pose_list):
+        if anim_f != ALL_FILTER and e["anim"] != anim_f:
+            continue
+        if view_f != ALL_FILTER and e["view"] != view_f:
+            continue
+        if frame_f != ALL_FILTER and e["frame_key"] != frame_f:
+            continue
+        out.append(e)
+    return out
+
+
+def poses_dir_fingerprint(pose_list: str | None = None) -> str:
+    """Stable hash of pose library mtimes (+ optional pose_list text)."""
+    h = hashlib.sha1()
+    h.update((pose_list or "").encode("utf-8", errors="replace"))
+    for d in _pose_search_dirs():
+        if not d.exists():
+            continue
+        for p in sorted(d.glob("*.pose")):
+            try:
+                st = p.stat()
+                h.update(p.name.encode("utf-8"))
+                h.update(str(st.st_mtime_ns).encode("ascii"))
+                h.update(str(st.st_size).encode("ascii"))
+            except OSError:
+                continue
+    return h.hexdigest()
 
 
 class ExtractPose:

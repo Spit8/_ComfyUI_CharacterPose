@@ -339,9 +339,33 @@ def test_node_mappings_import():
         "CP_BuildEditPrompt",
         "CP_PoseComposer3D",
         "CP_PoseTransferPrep",
+        "CP_MixamoPoseExport",
+        "CP_KleinPoseBatch",
     ):
         assert required in keys, f"missing node mapping: {required}"
     print(f"OK node mappings ({len(keys)} nodes)")
+
+
+def test_parse_edit_prompts():
+    klein = importlib.import_module(f"{PKG}.nodes.klein_batch")
+    parse = klein.parse_edit_prompts
+    prompts = parse('["a", "b", "c"]', 3)
+    assert prompts == ["a", "b", "c"]
+    padded = parse('["only"]', 3)
+    assert padded == ["only", "only", "only"]
+    truncated = parse('["a", "b", "c", "d"]', 2)
+    assert truncated == ["a", "b"]
+    try:
+        parse("", 1)
+        raise AssertionError("expected empty edit_prompts to fail")
+    except ValueError:
+        pass
+    try:
+        parse("not-json", 1)
+        raise AssertionError("expected invalid JSON to fail")
+    except ValueError:
+        pass
+    print("OK parse_edit_prompts")
 
 
 if __name__ == "__main__":
@@ -356,4 +380,5 @@ if __name__ == "__main__":
     test_edit_prompt_and_caption_fallback()
     test_fit_pose_and_filtered_palette()
     test_node_mappings_import()
+    test_parse_edit_prompts()
     print("All smoke tests passed.")

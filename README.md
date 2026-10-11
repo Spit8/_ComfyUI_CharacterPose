@@ -66,12 +66,12 @@ Open: `workflows/pose_transfer_flux_klein.json`
 
 ```
 LoadImage (sprite)
-  → CP_PoseTransferPrep (pose_file from poses/, prop hint)
-       → guide IMAGE + edit_prompt STRING
-Flux.2 Klein dual ReferenceLatent:
-  ref1 = sprite | ref2 = guide
-  prompt = edit_prompt (auto)
-→ SaveImage
+  → CP_MixamoPoseExport (optional) → pose_list
+  → CP_PoseTransferPrep (filters ALL or one value each)
+       → guide [N], image_batch [N], edit_prompts [N]
+  → CP_KleinPoseBatch (sequential: prompt[i] + guide[i] per pose)
+       → preview/save prefix_000, prefix_001, … as each finishes
+  → SaveImage (full batch at the end)
 ```
 
 ### Models for Flux Klein path
@@ -86,6 +86,7 @@ Flux.2 Klein dual ReferenceLatent:
 
 - Distilled Klein: ~4 steps, CFG `1`.
 - Prep **`align_to_source`** (default on) scales the library stick to the sprite, then **contains** it in the canvas (shrink + recenter with margin) so open Mixamo poses do not clip.
+- Prep selects poses **only** via filters (`animation` / `orientation` / `frame`, each `ALL` or one value) → **guide** + **image_batch** + **edit_prompts** (JSON, one prompt per pose with VIEW LOCK). `CP_KleinPoseBatch` runs **one sample at a time** (same quality as N=1) and writes progressive previews (`prefix_000`…). Narrow filters for a single pose. **Restart ComfyUI** after updating custom nodes before reloading `pose_transfer_flux_klein.json`.
 - Prep auto-prompt adds a **VIEW LOCK** from the `.pose` (`metadata.view` or filename `_NE` / `_TOP`…) so back views (NE/NO/N/TOP) are stated explicitly, with APPEARANCE LOCK from-behind — still soft on Klein; prefer Qwen ControlNet for hard rear angles.
 - If bones appear: the Prep prompt already includes anti-skeleton wording; change seed.
 - Klein has **no OpenPose ControlNet** — for a hard lock use the Qwen workflow.
@@ -115,19 +116,26 @@ Alternative: DiffSynth Union LoRA `qwen_image_union_diffsynth_lora.safetensors` 
 
 ## Pose library (Mixamo → `.pose`)
 
-`CP_PoseTransferPrep` and `CP_PoseLibraryLoad` list **every** `*.pose` in package `poses/` and `ComfyUI/input/poses/` (no name filter). Add files, refresh the node definitions if the combo looks stale.
+### In ComfyUI — `CP_MixamoPoseExport`
+
+1. Drop Mixamo `.fbx` into `ComfyUI/input/` or `input/mixamo/`.
+2. Install **`pufbx`** in the ComfyUI Python env (`pip install pufbx`, see `mixamo_tools/requirements.txt`).
+3. Run **Mixamo Pose Export**: orientations `4_iso` | `4_cardinal` | `6` | `8`, `frames_per_view` = samples per angle → writes `{anim}_{VIEW}_{ii}.pose` into package `poses/`.
+4. Prep: choose `animation` / `orientation` / `frame` (`ALL` = every match). Optionally wire export `pose_list` so the filters apply to that export only; otherwise Prep scans `poses/` on disk → **guide batch**.
+
+### CLI (optional)
 
 ```powershell
 cd mixamo_tools
-.\venv\Scripts\python.exe -m export_views --positions 4 --view SE --out-dir ..\poses
+.\venv\Scripts\python.exe -m export_views --positions 4 --view 8 --out-dir ..\poses
 ```
 
 | Orientation | Meaning |
 |-------------|---------|
-| `*_SE` / `*_se` | South-East — ¾ front-right |
-| `*_SO` / `*_so` | South-West — ¾ front-left |
-| `*_NE` / `*_ne` | North-East — ¾ back-right |
-| `*_NO` / `*_no` | North-West — ¾ back-left |
+| `*_SE` / `*_SO` | South-East / South-West — ¾ front |
+| `*_NE` / `*_NO` | North-East / North-West — ¾ back |
+| `*_TOP` / `*_BOT` | Full back / full front (ISO map) |
+| `*_LEFT` / `*_RIGHT` | Profiles |
 
 ### `source_pose` preview (Prep)
 
@@ -150,7 +158,9 @@ Node: `CP_PoseComposer3D` — separate from Prep. Use when you want a guide **wi
 
 | Node | Role |
 |------|------|
-| `CP_PoseTransferPrep` | Caption + load `.pose` + align → `guide`, `source_pose`, `preview_pose`, prompt |
+| `CP_MixamoPoseExport` | Mixamo FBX → `.pose` library + `pose_list` (needs `pufbx`) |
+| `CP_PoseTransferPrep` | Filters + caption + align → `guide` batch, `edit_prompt` / `edit_prompts`, … |
+| `CP_KleinPoseBatch` | Sequential Klein sample per Prep item (per-prompt + progressive preview) |
 | `CP_PoseComposer3D` | Optional 3D action/camera/props → POSE + guide |
 | `CP_CharacterCaption` | Florence-2 + palette hex → caption / edit_prompt / backend |
 | `CP_BuildEditPrompt` | Assemble caption + palette + props + anti-bones |

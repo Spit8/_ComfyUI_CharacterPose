@@ -92,7 +92,7 @@ A failed FBX is logged and skipped; exit code is non-zero if any failed or none 
 |------|---------|---------|
 | `--fbx` | `mixamo/` (dir) | One `.fbx` **or** a directory of FBX |
 | `--positions N` | `4` | Evenly spaced samples over the clip |
-| `--view` | `ALL` | `SE` `SO` `NE` `NO` `LEFT` `RIGHT` `TOP` `BOT` / `ALL` |
+| `--view` | `ALL` | single code, `4_iso`, `4_cardinal`, `6`, `8`, or `ALL` |
 | `--frame` | — | Single frame index (overrides `--positions`) |
 | `--out-dir` | `mixamo_tools/out` | Output folder (use `../poses` for the library) |
 | `--size` | `1024` | Square canvas |
