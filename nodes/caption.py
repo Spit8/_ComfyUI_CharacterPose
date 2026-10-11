@@ -65,22 +65,26 @@ _VIEW_HINTS = {
     ),
     "NE": (
         "three-quarter back-right isometric view (north-east), face mostly hidden or not visible, "
-        "show the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+        "show the back of the head and hair only — do NOT invent a front-facing face, backpack, cape, "
+        "or other gear not on the reference character"
     ),
     "NO": (
         "three-quarter back-left isometric view (north-west), face mostly hidden or not visible, "
-        "show the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+        "show the back of the head and hair only — do NOT invent a front-facing face, backpack, cape, "
+        "or other gear not on the reference character"
     ),
     "S": "front / south-facing view, face toward the camera",
     "N": (
         "full back view (north), face not visible, "
-        "show only the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+        "show only the back of the head and hair — do NOT invent a front-facing face, backpack, cape, "
+        "or other gear not on the reference character"
     ),
     "LEFT": "strict left profile side view, one side of the body only, ear/shoulder silhouette",
     "RIGHT": "strict right profile side view, one side of the body only, ear/shoulder silhouette",
     "TOP": (
         "full back view (top / straight north), face not visible, "
-        "show only the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+        "show only the back of the head and hair — do NOT invent a front-facing face, backpack, cape, "
+        "or other gear not on the reference character"
     ),
     "BOT": (
         "full front-facing isometric view (bottom / straight south / face-on), face toward the camera, "
@@ -217,7 +221,8 @@ def build_edit_prompt(
         if is_back:
             lock += (
                 " This is a rear angle: do NOT keep a front-facing face or front T-pose — "
-                "show the back of the head and body only."
+                "show the back of the head and body only. "
+                "Do NOT invent a backpack, cape, bag, or any prop/accessory absent from the reference."
             )
         else:
             lock += (

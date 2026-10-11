@@ -250,6 +250,22 @@ def test_edit_prompt_and_caption_fallback():
     assert "sword" in prompt.lower()
     assert "NEVER draw bones" in prompt or "never draw bones" in prompt.lower()
 
+    back = build(
+        "red bearded knight in tunic with gold trim",
+        palette_hex=pal,
+        view_hint=caption_mod2.view_hint_text("TOP"),
+        view_code="TOP",
+    )
+    assert "VIEW LOCK" in back
+    assert "from behind" in back.lower()
+    assert "cape or backpack if any" not in back.lower()
+    assert "do not invent a backpack" in back.lower()
+    # Hint itself must not invite gear as content
+    for code in ("NE", "NO", "N", "TOP"):
+        hint = caption_mod2.view_hint_text(code).lower()
+        assert "backpack if any" not in hint
+        assert "do not invent" in hint and "backpack" in hint
+
     cap, pal2, backend = describe(rgb, style_bias="game sprite")
     assert isinstance(cap, str) and len(cap) > 5
     assert "#" in pal2
