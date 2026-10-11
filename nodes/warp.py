@@ -107,6 +107,64 @@ def _pose_center(pose: dict) -> np.ndarray | None:
     return (mn + mx) * 0.5
 
 
+def contain_pose_in_canvas(pose: dict, *, margin: float = 0.06) -> dict:
+    """Uniform shrink + recenter so all visible joints stay inside the canvas.
+
+    Never enlarges. No-op if already inside the padded frame or bbox is missing.
+    """
+    out = copy.deepcopy(pose)
+    w = max(1, int(out.get("width", 1024)))
+    h = max(1, int(out.get("height", 1024)))
+    m = float(np.clip(margin, 0.0, 0.45))
+    pad_x = m * w
+    pad_y = m * h
+    inner_w = max(1.0, w - 2.0 * pad_x)
+    inner_h = max(1.0, h - 2.0 * pad_y)
+
+    box = _pose_bbox(out)
+    if box is None:
+        return out
+    mn, mx = box
+    bw = float(mx[0] - mn[0])
+    bh = float(mx[1] - mn[1])
+    if bw < 1e-3 and bh < 1e-3:
+        return out
+
+    cx = 0.5 * (mn[0] + mx[0])
+    cy = 0.5 * (mn[1] + mx[1])
+    inside = (
+        mn[0] >= pad_x
+        and mn[1] >= pad_y
+        and mx[0] <= w - pad_x
+        and mx[1] <= h - pad_y
+    )
+    if inside:
+        return out
+
+    s = 1.0
+    if bw > 1e-3:
+        s = min(s, inner_w / bw)
+    if bh > 1e-3:
+        s = min(s, inner_h / bh)
+    s = float(min(s, 1.0))
+
+    # After shrink around bbox center, place bbox center at canvas center
+    target_cx = 0.5 * w
+    target_cy = 0.5 * h
+    new_kps = []
+    for x, y, c in out["keypoints"]:
+        if c <= 0:
+            new_kps.append([0.0, 0.0, 0.0])
+            continue
+        nx = (float(x) - cx) * s + target_cx
+        ny = (float(y) - cy) * s + target_cy
+        new_kps.append([nx, ny, float(c)])
+    out["keypoints"] = new_kps
+    out["width"] = w
+    out["height"] = h
+    return out
+
+
 def fit_pose_to_source(
     target: dict,
     source: dict | None = None,
@@ -120,6 +178,7 @@ def fit_pose_to_source(
 
     Prefers full-body height (bbox / head→ankle) over torso-only. If ``source``
     is missing, fits into ``content_box`` (sprite content bbox) at ~height_fill.
+    After fit, shrinks/recenters if joints would leave the canvas.
     """
     out = copy.deepcopy(target)
     tgt_h = _pose_height(target)
@@ -141,7 +200,7 @@ def fit_pose_to_source(
     if src_h is None or src_c is None:
         # Last resort: old torso align if we have a source pose
         if source is not None:
-            return align_pose_to_source(target, source)
+            return contain_pose_in_canvas(align_pose_to_source(target, source))
         return out
 
     # Blend full-body scale with torso/shoulder when available
@@ -178,7 +237,7 @@ def fit_pose_to_source(
     if source is not None:
         out["width"] = source.get("width", out.get("width"))
         out["height"] = source.get("height", out.get("height"))
-    return out
+    return contain_pose_in_canvas(out)
 
 
 def align_pose_to_source(target: dict, source: dict) -> dict:

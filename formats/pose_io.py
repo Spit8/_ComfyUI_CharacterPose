@@ -165,3 +165,25 @@ def scale_pose(pose: dict[str, Any], width: int, height: int) -> dict[str, Any]:
     out["height"] = int(height)
     out["keypoints"] = kps
     return out
+
+
+def scale_pose_letterbox(pose: dict[str, Any], width: int, height: int) -> dict[str, Any]:
+    """Uniform scale + center so the pose canvas fits inside width×height (no stretch)."""
+    src_w = max(1, int(pose.get("width", 1024)))
+    src_h = max(1, int(pose.get("height", 1024)))
+    dst_w = int(width)
+    dst_h = int(height)
+    s = min(dst_w / src_w, dst_h / src_h)
+    ox = 0.5 * (dst_w - src_w * s)
+    oy = 0.5 * (dst_h - src_h * s)
+    kps = []
+    for x, y, c in pose["keypoints"]:
+        if c <= 0:
+            kps.append([0.0, 0.0, 0.0])
+        else:
+            kps.append([float(x) * s + ox, float(y) * s + oy, float(c)])
+    out = dict(pose)
+    out["width"] = dst_w
+    out["height"] = dst_h
+    out["keypoints"] = kps
+    return out

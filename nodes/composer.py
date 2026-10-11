@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from ..formats.pose_io import load_pose, make_pose, scale_pose
+from ..formats.pose_io import load_pose, make_pose, scale_pose, scale_pose_letterbox
 from ..pose3d.camera import CAMERA_PRESETS, list_camera_presets
 from ..pose3d.from_prompt import PosePromptError, angles_from_text_prompt
 from ..pose3d.presets import list_action_presets
@@ -393,7 +393,7 @@ class PoseTransferPrep:
             path = _resolve_pose_path(pose_file)
         except FileNotFoundError as e:
             raise RuntimeError(str(e)) from e
-        pose = scale_pose(load_pose(path), w, h)
+        pose = scale_pose_letterbox(load_pose(path), w, h)
 
         prop_names = []
         if prop and prop != "none":
@@ -468,6 +468,7 @@ class PoseTransferPrep:
             prop_hint=hint,
             extra=extra,
             view_hint=vhint,
+            view_code=view_code,
         )
 
         return (

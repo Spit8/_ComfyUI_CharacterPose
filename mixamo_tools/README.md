@@ -4,16 +4,24 @@ Standalone tooling: **Mixamo FBX → OpenPose COCO-18 `.pose` + debug PNG** at i
 
 Not a ComfyUI custom node (yet). Drop / rename the `.pose` files into the package [`poses/`](../poses/) folder for `CP_PoseLibraryLoad`.
 
-## Camera labels (French ISO)
+## Camera labels
 
 | Label | Meaning | Orbit (yaw / pitch) |
 |-------|---------|---------------------|
-| **SE** | Sud-Est | −45° / −15° |
-| **SO** | Sud-Ouest | +45° / −15° |
-| **NE** | Nord-Est | −135° / −15° |
-| **NO** | Nord-Ouest | +135° / −15° |
+| **SE** | Sud-Est (¾ avant-droite) | −45° / −15° |
+| **SO** | Sud-Ouest (¾ avant-gauche) | +45° / −15° |
+| **NE** | Nord-Est (¾ dos-droite) | −135° / −15° |
+| **NO** | Nord-Ouest (¾ dos-gauche) | +135° / −15° |
+| **LEFT** | Profil gauche | +90° / −15° |
+| **RIGHT** | Profil droit | −90° / −15° |
+| **TOP** | Dos (100 % arrière, ≈ Nord) | 180° / −15° |
+| **BOT** | Face (100 % avant, ≈ Sud) | 0° / −15° |
 
-Pan / zoom / tilt (`look_at` + `distance`) are **fixed for the whole export**. Only the orbit yaw changes between SE/SO/NE/NO.
+Pan / zoom (`look_at` + `distance`) are **fixed for the whole export** per FBX. `--view ALL` exports all 8 codes.
+
+```powershell
+.\venv\Scripts\python.exe -m export_views --positions 4 --view TOP --out-dir ..\poses
+```
 
 ## Install
 
@@ -84,7 +92,7 @@ A failed FBX is logged and skipped; exit code is non-zero if any failed or none 
 |------|---------|---------|
 | `--fbx` | `mixamo/` (dir) | One `.fbx` **or** a directory of FBX |
 | `--positions N` | `4` | Evenly spaced samples over the clip |
-| `--view` | `ALL` | `SE` / `SO` / `NE` / `NO` / `ALL` |
+| `--view` | `ALL` | `SE` `SO` `NE` `NO` `LEFT` `RIGHT` `TOP` `BOT` / `ALL` |
 | `--frame` | — | Single frame index (overrides `--positions`) |
 | `--out-dir` | `mixamo_tools/out` | Output folder (use `../poses` for the library) |
 | `--size` | `1024` | Square canvas |

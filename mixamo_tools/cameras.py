@@ -1,18 +1,23 @@
-"""Isometric-style camera presets (French SE/SO/NE/NO labels)."""
+"""Camera presets: French ISO (SE/SO/NE/NO) + cardinal (LEFT/RIGHT/TOP/BOT)."""
 
 from __future__ import annotations
 
 import numpy as np
 
-# French labels → orbit params (same as pose3d/camera.py SE/SW/NE/NW)
+# Orbit params around look_at (Y-up). ISO matches pose3d SE/SW/NE/NW naming.
 CAMERA_PRESETS: dict[str, dict[str, float]] = {
     "SE": {"yaw": -45.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
     "SO": {"yaw": 45.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},  # SW
     "NE": {"yaw": -135.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
     "NO": {"yaw": 135.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},  # NW
+    "LEFT": {"yaw": 90.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
+    "RIGHT": {"yaw": -90.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
+    # 2D ISO cardinals (map haut/bas): TOP≈Nord=dos, BOT≈Sud=face — not bird's-eye
+    "TOP": {"yaw": 180.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
+    "BOT": {"yaw": 0.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
 }
 
-VIEW_ORDER = ("SE", "SO", "NE", "NO")
+VIEW_ORDER = ("SE", "SO", "NE", "NO", "LEFT", "RIGHT", "TOP", "BOT")
 
 
 def _rot_y(deg: float) -> np.ndarray:
@@ -44,6 +49,11 @@ def camera_matrix(
     forward = target - cam_pos
     forward = forward / (np.linalg.norm(forward) + 1e-8)
     world_up = np.array([0.0, 1.0, 0.0], dtype=np.float64)
+    # Near top/bottom views: Y-up is parallel to forward — pick a stable alternate up
+    if abs(float(np.dot(forward, world_up))) > 0.99:
+        world_up = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        if abs(float(np.dot(forward, world_up))) > 0.99:
+            world_up = np.array([1.0, 0.0, 0.0], dtype=np.float64)
     right = np.cross(forward, world_up)
     if np.linalg.norm(right) < 1e-6:
         right = np.array([1.0, 0.0, 0.0], dtype=np.float64)

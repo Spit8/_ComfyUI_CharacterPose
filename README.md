@@ -85,7 +85,8 @@ Flux.2 Klein dual ReferenceLatent:
 **Tips**
 
 - Distilled Klein: ~4 steps, CFG `1`.
-- Prep auto-prompt adds a **VIEW LOCK** from the `.pose` (`metadata.view` or filename `_NE` / `_SE`…) so back views (NE/NO) are stated explicitly — still soft on Klein; prefer Qwen ControlNet for hard rear angles.
+- Prep **`align_to_source`** (default on) scales the library stick to the sprite, then **contains** it in the canvas (shrink + recenter with margin) so open Mixamo poses do not clip.
+- Prep auto-prompt adds a **VIEW LOCK** from the `.pose` (`metadata.view` or filename `_NE` / `_TOP`…) so back views (NE/NO/N/TOP) are stated explicitly, with APPEARANCE LOCK from-behind — still soft on Klein; prefer Qwen ControlNet for hard rear angles.
 - If bones appear: the Prep prompt already includes anti-skeleton wording; change seed.
 - Klein has **no OpenPose ControlNet** — for a hard lock use the Qwen workflow.
 

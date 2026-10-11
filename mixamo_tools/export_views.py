@@ -75,7 +75,9 @@ def resolve_views(view: str) -> list[str]:
     if v in ("ALL", "*"):
         return list(VIEW_ORDER)
     if v not in CAMERA_PRESETS:
-        raise ValueError(f"Unknown view {view!r}; expected SE|SO|NE|NO|ALL")
+        raise ValueError(
+            f"Unknown view {view!r}; expected SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|ALL"
+        )
     return [v]
 
 
@@ -196,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         "--view",
         type=str,
         default="ALL",
-        help="SE|SO|NE|NO|ALL (default: ALL)",
+        help="SE|SO|NE|NO|LEFT|RIGHT|TOP|BOT|ALL (default: ALL)",
     )
     p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="Output directory")
     p.add_argument(

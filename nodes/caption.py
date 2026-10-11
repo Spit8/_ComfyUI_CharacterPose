@@ -47,6 +47,11 @@ _ORIENTATION_TO_VIEW = {
     "north": "N",
     "back": "N",
     "n": "N",
+    "top": "TOP",
+    "bottom": "BOT",
+    "bot": "BOT",
+    "left": "LEFT",
+    "right": "RIGHT",
 }
 
 _VIEW_HINTS = {
@@ -67,14 +72,30 @@ _VIEW_HINTS = {
         "show the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
     ),
     "S": "front / south-facing view, face toward the camera",
-    "N": "full back view (north), face not visible, show only the back of the character",
+    "N": (
+        "full back view (north), face not visible, "
+        "show only the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+    ),
+    "LEFT": "strict left profile side view, one side of the body only, ear/shoulder silhouette",
+    "RIGHT": "strict right profile side view, one side of the body only, ear/shoulder silhouette",
+    "TOP": (
+        "full back view (top / straight north), face not visible, "
+        "show only the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+    ),
+    "BOT": (
+        "full front-facing isometric view (bottom / straight south / face-on), face toward the camera, "
+        "chest and front of outfit fully readable"
+    ),
 }
 
 _VIEW_CODES = frozenset(_VIEW_HINTS.keys())
+# Rear angles: APPEARANCE LOCK must not push a front-facing face
+_BACK_VIEW_CODES = frozenset({"NE", "NO", "N", "TOP"})
 
-# Filename tokens: _SE_, _NE, _ne, _SE at end, etc.
+# Filename tokens: _SE_, _TOP, _BOT, _BOTTOM, etc.
 _VIEW_IN_NAME = re.compile(
-    r"(?:^|_)(SE|SO|NE|NO|SW|NW)(?:_|$)|(?:^|_)(se|so|ne|no|sw|nw)(?:_|$)",
+    r"(?:^|_)(SE|SO|NE|NO|SW|NW|LEFT|RIGHT|TOP|BOT|BOTTOM)(?:_|$)"
+    r"|(?:^|_)(se|so|ne|no|sw|nw|left|right|top|bot|bottom)(?:_|$)",
     re.IGNORECASE,
 )
 
@@ -103,8 +124,8 @@ def _normalize_view_code(raw: str | None) -> str | None:
     s = str(raw).strip().upper().replace("-", "_")
     if s in _VIEW_CODES:
         return s
-    # SW/NW aliases (English) → French SO/NO
-    aliases = {"SW": "SO", "NW": "NO"}
+    # SW/NW aliases (English) → French SO/NO; BOTTOM → BOT (ISO back)
+    aliases = {"SW": "SO", "NW": "NO", "BOTTOM": "BOT"}
     if s in aliases:
         return aliases[s]
     mapped = _ORIENTATION_TO_VIEW.get(str(raw).strip().lower().replace("-", "_"))
@@ -114,7 +135,7 @@ def _normalize_view_code(raw: str | None) -> str | None:
 
 
 def resolve_view_code(pose: dict[str, Any] | None, pose_file: str = "") -> str | None:
-    """Best-effort camera/view code from pose metadata or filename (SE/SO/NE/NO/S/N)."""
+    """Best-effort view code from pose metadata or filename (ISO + LEFT/RIGHT/TOP/BOT)."""
     meta = (pose or {}).get("metadata") or {}
     for key in ("view", "orientation", "camera"):
         code = _normalize_view_code(meta.get(key) if isinstance(meta, dict) else None)
@@ -129,7 +150,9 @@ def resolve_view_code(pose: dict[str, Any] | None, pose_file: str = "") -> str |
         token = m.group(1) or m.group(2)
         return _normalize_view_code(token)
     # Trailing _ne / _se without following underscore (idle_ne)
-    m2 = re.search(r"_(se|so|ne|no|sw|nw)$", stem, re.IGNORECASE)
+    m2 = re.search(
+        r"_(se|so|ne|no|sw|nw|left|right|top|bot|bottom)$", stem, re.IGNORECASE
+    )
     if m2:
         return _normalize_view_code(m2.group(1))
     return None
@@ -152,17 +175,27 @@ def build_edit_prompt(
     prop_hint: str = "",
     extra: str = "",
     view_hint: str = "",
+    view_code: str | None = None,
     include_anti_bones: bool = True,
 ) -> str:
     """Assemble an edit prompt that leads with appearance / color lock."""
     cap = (caption or "").strip() or DEFAULT_FALLBACK_CAPTION
     pal = (palette_hex or "").strip()
+    vcode = _normalize_view_code(view_code) if view_code else None
+    is_back = vcode in _BACK_VIEW_CODES
 
     parts: list[str] = []
-    parts.append(
-        "APPEARANCE LOCK — match this character exactly (face, hair, outfit, accessories, "
-        f"line weight, shading style): {cap}."
-    )
+    if is_back:
+        parts.append(
+            "APPEARANCE LOCK — match this character exactly from behind "
+            "(hair, outfit, accessories, line weight, shading style — face hidden / not visible): "
+            f"{cap}."
+        )
+    else:
+        parts.append(
+            "APPEARANCE LOCK — match this character exactly (face, hair, outfit, accessories, "
+            f"line weight, shading style): {cap}."
+        )
     if pal:
         parts.append(
             f"COLOR LOCK — dominant garment / skin / accessory colors must be exactly: {pal}. "
@@ -177,11 +210,20 @@ def build_edit_prompt(
     )
     vh = (view_hint or "").strip()
     if vh:
-        parts.append(
+        lock = (
             "VIEW LOCK — the character must be shown in this camera orientation matching the "
-            f"pose guide: {vh.rstrip('.')}. "
-            "Do not keep a front T-pose facing the camera if the guide shows a different angle."
+            f"pose guide: {vh.rstrip('.')}."
         )
+        if is_back:
+            lock += (
+                " This is a rear angle: do NOT keep a front-facing face or front T-pose — "
+                "show the back of the head and body only."
+            )
+        else:
+            lock += (
+                " Do not keep a front T-pose facing the camera if the guide shows a different angle."
+            )
+        parts.append(lock)
     hint = (prop_hint or "").strip()
     if hint:
         parts.append(hint.rstrip(".") + ".")
