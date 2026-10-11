@@ -31,7 +31,7 @@ from mixamo_tools.fbx_skeleton import (  # noqa: E402
     sample_coco18_joints,
 )
 
-DEFAULT_FBX = REPO / "mixamo" / "Slow Run.fbx"
+DEFAULT_MIXAMO_DIR = REPO / "mixamo"
 DEFAULT_OUT = ROOT / "out"
 
 
@@ -39,6 +39,20 @@ def _slug(name: str) -> str:
     s = Path(name).stem.strip().lower()
     s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
     return s or "anim"
+
+
+def discover_fbx(path: Path) -> list[Path]:
+    """Resolve a file or directory into a sorted list of FBX paths (non-recursive)."""
+    path = Path(path)
+    if path.is_file():
+        if path.suffix.lower() != ".fbx":
+            raise ValueError(f"Not an FBX file: {path}")
+        return [path]
+    if path.is_dir():
+        found = {p.resolve(): p for p in path.glob("*.fbx")}
+        found.update({p.resolve(): p for p in path.glob("*.FBX")})
+        return sorted(found.values(), key=lambda p: p.name.lower())
+    raise FileNotFoundError(f"FBX path not found: {path}")
 
 
 def sample_frame_indices(n_frames: int, positions: int) -> list[int]:
@@ -156,10 +170,16 @@ def export_views(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Export isometric OpenPose views from a Mixamo FBX "
-        "(PNG debug + .pose for ComfyUI PoseLibrary; fixed camera across frames)."
+        description="Export isometric OpenPose views from Mixamo FBX file(s) "
+        "(PNG debug + .pose for ComfyUI PoseLibrary; fixed camera across frames). "
+        "Default --fbx is the mixamo/ folder (all *.fbx)."
     )
-    p.add_argument("--fbx", type=Path, default=DEFAULT_FBX, help="Path to Mixamo .fbx")
+    p.add_argument(
+        "--fbx",
+        type=Path,
+        default=DEFAULT_MIXAMO_DIR,
+        help="Mixamo .fbx file, or a directory of .fbx (default: repo mixamo/)",
+    )
     p.add_argument(
         "--positions",
         type=int,
@@ -179,8 +199,18 @@ def main(argv: list[str] | None = None) -> int:
         help="SE|SO|NE|NO|ALL (default: ALL)",
     )
     p.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="Output directory")
-    p.add_argument("--size", type=int, default=1024, help="Canvas size (square)")
-    p.add_argument("--stem", type=str, default=None, help="Output filename prefix")
+    p.add_argument(
+        "--size",
+        type=int,
+        default=1024,
+        help="Canvas size (square)",
+    )
+    p.add_argument(
+        "--stem",
+        type=str,
+        default=None,
+        help="Output filename prefix (single-file mode only; ignored in batch)",
+    )
     p.add_argument(
         "--margin",
         type=float,
@@ -199,30 +229,48 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    if not args.fbx.is_file():
-        print(f"FBX not found: {args.fbx}", file=sys.stderr)
-        return 1
     if args.positions < 1:
         print("--positions must be >= 1", file=sys.stderr)
         return 1
 
     try:
-        export_views(
-            args.fbx,
-            args.out_dir,
-            positions=args.positions,
-            frame=args.frame,
-            view=args.view,
-            size=args.size,
-            stem=args.stem,
-            margin=args.margin,
-            write_png=not args.no_png,
-            write_pose=not args.no_pose,
-        )
-    except ValueError as e:
+        fbx_list = discover_fbx(args.fbx)
+    except (FileNotFoundError, ValueError) as e:
         print(str(e), file=sys.stderr)
         return 1
-    return 0
+
+    if not fbx_list:
+        print(f"No .fbx files in {args.fbx}", file=sys.stderr)
+        return 1
+
+    batch = len(fbx_list) > 1
+    if batch and args.stem:
+        print("note: --stem ignored in batch mode (stem comes from each FBX name)", file=sys.stderr)
+
+    ok = 0
+    fail = 0
+    for fbx_path in fbx_list:
+        print(f"=== {fbx_path.name} ===")
+        try:
+            export_views(
+                fbx_path,
+                args.out_dir,
+                positions=args.positions,
+                frame=args.frame,
+                view=args.view,
+                size=args.size,
+                stem=None if batch else args.stem,
+                margin=args.margin,
+                write_png=not args.no_png,
+                write_pose=not args.no_pose,
+            )
+            ok += 1
+        except Exception as e:
+            fail += 1
+            print(f"ERROR {fbx_path}: {e}", file=sys.stderr)
+
+    print(f"done ok={ok} fail={fail} total={len(fbx_list)}")
+    return 1 if fail or ok == 0 else 0
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -24,6 +26,58 @@ DEFAULT_FALLBACK_CAPTION = (
     "full-body 2D game character sprite, cartoon line art, clean flat colors, plain background"
 )
 
+_ORIENTATION_TO_VIEW = {
+    "south_east": "SE",
+    "southeast": "SE",
+    "se": "SE",
+    "south_west": "SO",
+    "southwest": "SO",
+    "sw": "SO",
+    "so": "SO",
+    "north_east": "NE",
+    "northeast": "NE",
+    "ne": "NE",
+    "north_west": "NO",
+    "northwest": "NO",
+    "nw": "NO",
+    "no": "NO",
+    "south": "S",
+    "front": "S",
+    "s": "S",
+    "north": "N",
+    "back": "N",
+    "n": "N",
+}
+
+_VIEW_HINTS = {
+    "SE": (
+        "three-quarter front-right isometric view (south-east), face partly visible, "
+        "chest and front of outfit readable"
+    ),
+    "SO": (
+        "three-quarter front-left isometric view (south-west), face partly visible, "
+        "chest and front of outfit readable"
+    ),
+    "NE": (
+        "three-quarter back-right isometric view (north-east), face mostly hidden or not visible, "
+        "show the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+    ),
+    "NO": (
+        "three-quarter back-left isometric view (north-west), face mostly hidden or not visible, "
+        "show the back of the head, hair, cape or backpack if any — do NOT invent a front-facing face"
+    ),
+    "S": "front / south-facing view, face toward the camera",
+    "N": "full back view (north), face not visible, show only the back of the character",
+}
+
+_VIEW_CODES = frozenset(_VIEW_HINTS.keys())
+
+# Filename tokens: _SE_, _NE, _ne, _SE at end, etc.
+_VIEW_IN_NAME = re.compile(
+    r"(?:^|_)(SE|SO|NE|NO|SW|NW)(?:_|$)|(?:^|_)(se|so|ne|no|sw|nw)(?:_|$)",
+    re.IGNORECASE,
+)
+
 
 def palette_hex_string(rgb: np.ndarray, n_colors: int = 8) -> str:
     """Dominant garment palette as '#RRGGBB, #…' (background whites dropped)."""
@@ -43,12 +97,61 @@ def palette_hex_string(rgb: np.ndarray, n_colors: int = 8) -> str:
     return ", ".join(parts)
 
 
+def _normalize_view_code(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    s = str(raw).strip().upper().replace("-", "_")
+    if s in _VIEW_CODES:
+        return s
+    # SW/NW aliases (English) → French SO/NO
+    aliases = {"SW": "SO", "NW": "NO"}
+    if s in aliases:
+        return aliases[s]
+    mapped = _ORIENTATION_TO_VIEW.get(str(raw).strip().lower().replace("-", "_"))
+    if mapped in _VIEW_CODES:
+        return mapped
+    return None
+
+
+def resolve_view_code(pose: dict[str, Any] | None, pose_file: str = "") -> str | None:
+    """Best-effort camera/view code from pose metadata or filename (SE/SO/NE/NO/S/N)."""
+    meta = (pose or {}).get("metadata") or {}
+    for key in ("view", "orientation", "camera"):
+        code = _normalize_view_code(meta.get(key) if isinstance(meta, dict) else None)
+        if code:
+            return code
+
+    stem = Path(pose_file or (pose or {}).get("name") or "").stem
+    if not stem:
+        return None
+    m = _VIEW_IN_NAME.search(stem)
+    if m:
+        token = m.group(1) or m.group(2)
+        return _normalize_view_code(token)
+    # Trailing _ne / _se without following underscore (idle_ne)
+    m2 = re.search(r"_(se|so|ne|no|sw|nw)$", stem, re.IGNORECASE)
+    if m2:
+        return _normalize_view_code(m2.group(1))
+    return None
+
+
+def view_hint_text(code: str | None) -> str:
+    """Human prompt fragment for a view code, or empty if unknown."""
+    if not code:
+        return ""
+    norm = _normalize_view_code(code)
+    if not norm:
+        return ""
+    return _VIEW_HINTS.get(norm, "")
+
+
 def build_edit_prompt(
     caption: str,
     *,
     palette_hex: str = "",
     prop_hint: str = "",
     extra: str = "",
+    view_hint: str = "",
     include_anti_bones: bool = True,
 ) -> str:
     """Assemble an edit prompt that leads with appearance / color lock."""
@@ -72,6 +175,13 @@ def build_edit_prompt(
         "Change ONLY the body pose to match the stick-figure pose guide. "
         "Identity and colors must stay identical to the description above."
     )
+    vh = (view_hint or "").strip()
+    if vh:
+        parts.append(
+            "VIEW LOCK — the character must be shown in this camera orientation matching the "
+            f"pose guide: {vh.rstrip('.')}. "
+            "Do not keep a front T-pose facing the camera if the guide shows a different angle."
+        )
     hint = (prop_hint or "").strip()
     if hint:
         parts.append(hint.rstrip(".") + ".")

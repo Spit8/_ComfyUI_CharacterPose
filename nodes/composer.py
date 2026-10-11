@@ -12,7 +12,12 @@ from ..pose3d.presets import list_action_presets
 from ..pose3d.project import compose_pose
 from ..pose3d.props import list_props, prop_hint_text, resolve_props
 from ..utils import content_bbox, draw_openpose, np_to_tensor, tensor_to_np
-from .caption import build_edit_prompt, describe_character
+from .caption import (
+    build_edit_prompt,
+    describe_character,
+    resolve_view_code,
+    view_hint_text,
+)
 from .pose import _list_pose_files, _resolve_pose_path
 from .warp import fit_pose_to_source
 
@@ -455,11 +460,14 @@ class PoseTransferPrep:
             resolved_caption = "full-body 2D game character sprite, cartoon line art"
             backend = "disabled"
 
+        view_code = resolve_view_code(pose, pose_file=pose_file)
+        vhint = view_hint_text(view_code)
         edit_prompt = build_edit_prompt(
             resolved_caption,
             palette_hex=palette_hex,
             prop_hint=hint,
             extra=extra,
+            view_hint=vhint,
         )
 
         return (

@@ -36,16 +36,20 @@ Deps: `numpy`, `Pillow`, `pufbx`.
 
 ## Usage
 
-By default each sample writes **both** `{stem}_{VIEW}_{ii:02d}.pose` and a debug PNG.
+**By default**, `--fbx` points at the repo `mixamo/` **folder** and exports **every** `*.fbx` / `*.FBX` in it (non-recursive). Each anim gets its own stem from the filename.
 
 Recommended (local venv) — write into the Comfy pose library folder:
 
 ```powershell
 .\venv\Scripts\python.exe -m export_views --positions 4 --view SE --out-dir ..\poses
-# → poses/slow_run_SE_00.pose … (+ PNG unless --no-png)
+# → all FBX under mixamo/ → poses/{anim}_{VIEW}_{ii}.pose (+ PNG unless --no-png)
 ```
 
-Rename files if a workflow expects names like `idle_se.pose` / `run_se_01.pose`.
+One file only:
+
+```powershell
+.\venv\Scripts\python.exe -m export_views --fbx ..\mixamo\"Slow Run.fbx" --positions 4 --view SE --out-dir ..\poses
+```
 
 `.pose` only (no PNG):
 
@@ -72,37 +76,28 @@ From **inside** `mixamo_tools/`:
 python -m export_views --positions 4 --view SE
 ```
 
-```bash
-python -m mixamo_tools.export_views --positions 4
-```
-
-→ 16 samples × (`.pose` + PNG) for 4 views × 4 positions
-
-```bash
-python -m mixamo_tools.export_views --frame 11 --view NE
-```
-
-→ single frame override (`--positions` ignored)
+A failed FBX is logged and skipped; exit code is non-zero if any failed or none found.
 
 ### Options
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--fbx` | `mixamo/Slow Run.fbx` | Source FBX |
+| `--fbx` | `mixamo/` (dir) | One `.fbx` **or** a directory of FBX |
 | `--positions N` | `4` | Evenly spaced samples over the clip |
 | `--view` | `ALL` | `SE` / `SO` / `NE` / `NO` / `ALL` |
 | `--frame` | — | Single frame index (overrides `--positions`) |
 | `--out-dir` | `mixamo_tools/out` | Output folder (use `../poses` for the library) |
 | `--size` | `1024` | Square canvas |
 | `--margin` | `0.10` | Padding when auto-fitting zoom |
-| `--stem` | from FBX name | Filename prefix |
+| `--stem` | from FBX name | Filename prefix (**single-file only**; ignored in batch) |
 | `--no-png` | off | Skip debug PNG |
 | `--no-pose` | off | Skip `.pose` JSON |
 
 ## Pipeline
 
-1. Load FBX with `pufbx` (`anim_to_array` local TRS)
-2. Sample N frames at equal time steps
-3. Map Mixamo bones → OpenPose COCO-18 (normalized)
-4. Fit one shared camera distance so every sample fits on canvas
-5. Project each (view × position) → write `.pose` (+ optional stick PNG)
+1. Discover FBX file(s) under `--fbx`
+2. Load each with `pufbx` (`anim_to_array` local TRS)
+3. Sample N frames at equal time steps
+4. Map Mixamo bones → OpenPose COCO-18 (normalized)
+5. Fit one shared camera distance so every sample fits on canvas
+6. Project each (view × position) → write `.pose` (+ optional stick PNG)
