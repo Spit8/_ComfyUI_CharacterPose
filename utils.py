@@ -146,9 +146,21 @@ def extract_palette(image_rgb: np.ndarray, n_colors: int = 8) -> np.ndarray:
     km = MiniBatchKMeans(n_clusters=k, random_state=0, n_init=3, batch_size=2048)
     km.fit(sample)
     centers = np.clip(km.cluster_centers_ / 255.0, 0.0, 1.0).astype(np.float32)
-    # Prefer chromatic / mid tones: demote near-white centers
+
+    # Prefer saturated garment hues; demote near-white / near-black / gray
+    # so COLOR LOCK leads with the tunic color (e.g. red) not belt/boots.
+    r, g, b = centers[:, 0], centers[:, 1], centers[:, 2]
+    mx = np.maximum(np.maximum(r, g), b)
+    mn = np.minimum(np.minimum(r, g), b)
+    sat = np.where(mx > 1e-3, (mx - mn) / np.maximum(mx, 1e-3), 0.0)
     lum = centers @ np.array([0.299, 0.587, 0.114], dtype=np.float32)
-    order = np.argsort(lum)
+    near_white = (lum >= 0.92) & (sat < 0.12)
+    near_black = (lum <= 0.18) & (sat < 0.15)
+    near_gray = (sat < 0.10) & (lum > 0.18) & (lum < 0.92)
+    # Sort key: chromatic first (high sat), then mid luma; demoted tones last
+    demote = near_white.astype(np.float32) * 3.0 + near_black.astype(np.float32) * 2.0 + near_gray.astype(np.float32) * 1.0
+    # argsort ascending → negate sat so high sat first; add demote penalty
+    order = np.argsort(-sat + demote * 2.0 + np.abs(lum - 0.45) * 0.15)
     return centers[order]
 
 

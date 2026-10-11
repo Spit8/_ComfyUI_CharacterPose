@@ -104,8 +104,40 @@ _VIEW_IN_NAME = re.compile(
 )
 
 
+def _color_name_from_rgb255(r: int, g: int, b: int) -> str:
+    """Short English name for a garment swatch (prompt-friendly)."""
+    if max(r, g, b) < 45:
+        return "near-black"
+    if min(r, g, b) > 210:
+        return "near-white"
+    mx, mn = max(r, g, b), min(r, g, b)
+    sat = (mx - mn) / max(mx, 1)
+    if sat < 0.12:
+        return "gray" if 60 < (r + g + b) / 3 < 200 else ("near-black" if mx < 80 else "near-white")
+    if r > g + 40 and r > b + 40:
+        if r > 140 and g < 90:
+            return "deep red" if r < 200 or g + b < 120 else "red"
+        return "red"
+    if r > 150 and g > 80 and b < 100 and r > b + 40:
+        return "orange/gold" if g > 110 else "burgundy"
+    if r > 100 and g < 80 and b < 80 and r > g + 30:
+        return "burgundy"
+    if g > r + 35 and g > b + 35:
+        return "green"
+    if b > r + 35 and b > g + 35:
+        return "blue"
+    if r > 100 and g > 70 and b > 40 and abs(r - g) < 45:
+        return "brown/tan"
+    if abs(r - g) < 20 and abs(g - b) < 20:
+        return "gray"
+    return "mixed"
+
+
 def palette_hex_string(rgb: np.ndarray, n_colors: int = 8) -> str:
-    """Dominant garment palette as '#RRGGBB, #…' (background whites dropped)."""
+    """Dominant garment palette as '#RRGGBB, #…' (background whites dropped).
+
+    Order follows extract_palette (saturated hues first).
+    """
     try:
         pal = extract_palette(rgb, n_colors=int(n_colors))
     except Exception:
@@ -120,6 +152,38 @@ def palette_hex_string(rgb: np.ndarray, n_colors: int = 8) -> str:
             continue
         parts.append(f"#{r:02X}{g:02X}{b:02X}")
     return ", ".join(parts)
+
+
+def primary_garment_color(rgb: np.ndarray, n_colors: int = 8) -> tuple[str, str]:
+    """Most saturated non-background palette swatch -> (name, '#RRGGBB') or ('', '')."""
+    try:
+        pal = extract_palette(rgb, n_colors=int(n_colors))
+    except Exception:
+        return "", ""
+    if pal is None or len(pal) == 0:
+        return "", ""
+    best_name, best_hex, best_sat = "", "", -1.0
+    for c in pal:
+        r, g, b = (int(round(float(x) * 255)) for x in c[:3])
+        if min(r, g, b) >= 235 and max(r, g, b) - min(r, g, b) < 25:
+            continue
+        mx, mn = max(r, g, b), min(r, g, b)
+        sat = (mx - mn) / max(mx, 1)
+        name = _color_name_from_rgb255(r, g, b)
+        if name in ("near-white", "near-black", "gray") and sat < 0.15:
+            continue
+        if sat > best_sat:
+            best_sat = sat
+            best_name = name
+            best_hex = f"#{r:02X}{g:02X}{b:02X}"
+    if not best_hex:
+        # Fallback: first non-white hex from palette string
+        hx = palette_hex_string(rgb, n_colors=n_colors).split(",")[0].strip()
+        if hx.startswith("#") and len(hx) == 7:
+            r, g, b = int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16)
+            return _color_name_from_rgb255(r, g, b), hx
+        return "", ""
+    return best_name, best_hex
 
 
 def _normalize_view_code(raw: str | None) -> str | None:
@@ -188,6 +252,29 @@ def build_edit_prompt(
     vcode = _normalize_view_code(view_code) if view_code else None
     is_back = vcode in _BACK_VIEW_CODES
 
+    # Most saturated chromatic swatch from palette (extract_palette already sat-sorts)
+    primary_name, primary_hex = "", ""
+    if pal:
+        best_sat = -1.0
+        for hx in pal.split(","):
+            hx = hx.strip()
+            if not hx.startswith("#") or len(hx) != 7:
+                continue
+            try:
+                r, g, b = int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16)
+            except ValueError:
+                continue
+            name = _color_name_from_rgb255(r, g, b)
+            if name in ("near-white",):
+                continue
+            mx, mn = max(r, g, b), min(r, g, b)
+            sat = (mx - mn) / max(mx, 1)
+            if name in ("near-black", "gray") and sat < 0.15:
+                continue
+            if sat > best_sat:
+                best_sat = sat
+                primary_name, primary_hex = name, hx
+
     parts: list[str] = []
     if is_back:
         parts.append(
@@ -201,16 +288,28 @@ def build_edit_prompt(
             f"line weight, shading style): {cap}."
         )
     if pal:
-        parts.append(
-            f"COLOR LOCK — dominant garment / skin / accessory colors must be exactly: {pal}. "
-            "These are character colors only (ignore canvas white/empty background). "
-            "Do not recolor, desaturate, wash out, or invent new dominant hues."
-        )
+        if primary_name and primary_hex:
+            parts.append(
+                f"COLOR LOCK — primary garment color is {primary_name} ({primary_hex}); "
+                f"full character palette (must match): {pal}. "
+                "These are character colors only (ignore canvas white/empty background). "
+                f"Keep the tunic/robe/main clothing {primary_name} — do NOT darken, blacken, "
+                "gray-out, desaturate, wash out, or invert the main garment. "
+                "Black/dark only for belt, boots, hair, or trim already on the reference — "
+                "never replace the primary garment hue with black."
+            )
+        else:
+            parts.append(
+                f"COLOR LOCK — dominant garment / skin / accessory colors must be exactly: {pal}. "
+                "These are character colors only (ignore canvas white/empty background). "
+                "Do not recolor, desaturate, wash out, darken, or invent new dominant hues."
+            )
     parts.append(
         "Keep the exact same art style and materials as the reference image "
         "(including isometric / RTS sprite look if present). "
         "Change ONLY the body pose to match the stick-figure pose guide. "
-        "Identity and colors must stay identical to the description above."
+        "Identity and colors must stay identical to the description above — "
+        "preserve reference garment hues pixel-faithfully."
     )
     vh = (view_hint or "").strip()
     if vh:
@@ -252,37 +351,21 @@ def _heuristic_caption(rgb: np.ndarray, palette_hex: str = "") -> str:
     mask = content_mask(rgb)
     fill = float(np.mean(mask)) if mask.size else 1.0
 
-    def _name(hex_s: str) -> str:
-        try:
-            r = int(hex_s[1:3], 16)
-            g = int(hex_s[3:5], 16)
-            b = int(hex_s[5:7], 16)
-        except Exception:
-            return "mixed"
-        if max(r, g, b) < 45:
-            return "near-black"
-        if min(r, g, b) > 210:
-            return "near-white"
-        if r > g + 45 and r > b + 45:
-            return "red"
-        if r > 160 and g > 90 and b < 90:
-            return "orange/gold"
-        if g > r + 35 and g > b + 35:
-            return "green"
-        if b > r + 35 and b > g + 35:
-            return "blue"
-        if r > 100 and g > 70 and b > 40 and abs(r - g) < 45:
-            return "brown/tan"
-        if abs(r - g) < 20 and abs(g - b) < 20:
-            return "gray"
-        return "mixed"
-
+    pname, phex = primary_garment_color(rgb, n_colors=6)
     color_bits = []
+    if pname and phex:
+        color_bits.append(f"{pname} ({phex})")
     if pal:
         for hx in pal.split(",")[:5]:
             hx = hx.strip()
-            if hx.startswith("#"):
-                name = _name(hx)
+            if hx.startswith("#") and hx.upper() != (phex or "").upper():
+                try:
+                    r = int(hx[1:3], 16)
+                    g = int(hx[3:5], 16)
+                    b = int(hx[5:7], 16)
+                except Exception:
+                    continue
+                name = _color_name_from_rgb255(r, g, b)
                 if name == "near-white":
                     continue
                 color_bits.append(f"{name} ({hx})")
@@ -310,8 +393,11 @@ def _heuristic_caption(rgb: np.ndarray, palette_hex: str = "") -> str:
     else:
         style = "stylized 2D character illustration, clean outlines, game-ready sprite look"
 
+    primary_bit = (
+        f"primary garment: {pname} ({phex}), " if pname and phex else ""
+    )
     return (
-        f"{body} character, {style}, clothing and details in {color_str}, "
+        f"{body} character, {style}, {primary_bit}clothing and details in {color_str}, "
         f"preserve exact garment colors and silhouette from the reference"
     )
 
@@ -430,6 +516,27 @@ def caption_with_florence(
         return _heuristic_caption(rgb, pal), f"fallback_heuristic (florence error: {e})"
 
 
+def _enrich_caption_primary(caption: str, rgb: np.ndarray, palette_hex: str = "") -> str:
+    """Ensure caption states primary garment color (name + hex)."""
+    pname, phex = primary_garment_color(rgb)
+    if not pname or not phex:
+        if palette_hex:
+            hx = palette_hex.split(",")[0].strip()
+            if hx.startswith("#") and len(hx) == 7:
+                r, g, b = int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16)
+                pname, phex = _color_name_from_rgb255(r, g, b), hx
+    if not pname or not phex:
+        return caption
+    low = (caption or "").lower()
+    # Already mentions this hex or an explicit primary garment clause
+    if phex.lower() in low or (
+        "primary garment" in low and pname.split()[0] in low
+    ):
+        return caption
+    # If caption wrongly emphasizes black while primary is chromatic red/etc., still append
+    return f"{caption.rstrip('.')}. primary garment: {pname} ({phex})"
+
+
 def describe_character(
     rgb: np.ndarray,
     *,
@@ -452,6 +559,7 @@ def describe_character(
         style_bias=style_bias,
         palette_hex=pal,
     )
+    caption = _enrich_caption_primary(caption, crop, pal)
     return caption, pal, backend
 
 

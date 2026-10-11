@@ -230,12 +230,23 @@ def test_edit_prompt_and_caption_fallback():
     build = caption_mod2.build_edit_prompt
     describe = caption_mod2.describe_character
     palette_hex_string = caption_mod2.palette_hex_string
+    primary_garment_color = caption_mod2.primary_garment_color
 
-    rgb = np.zeros((64, 48, 3), dtype=np.uint8)
+    # Saturated red robe + black belt/boots (must not win as primary)
+    rgb = np.full((64, 48, 3), 255, dtype=np.uint8)
     rgb[10:50, 15:35] = (180, 40, 40)
-    rgb[20:30, 18:32] = (40, 80, 180)
+    rgb[40:48, 18:32] = (20, 20, 20)  # boots
+    rgb[28:32, 16:34] = (15, 15, 15)  # belt
+    rgb[20:26, 20:30] = (40, 80, 180)  # small accent
     pal = palette_hex_string(rgb, n_colors=4)
     assert "#" in pal
+
+    pname, phex = primary_garment_color(rgb, n_colors=4)
+    assert "red" in pname.lower(), f"expected red primary, got {pname!r} {phex}"
+    assert phex.startswith("#")
+    # Primary hex should be reddish (R dominant)
+    pr, pg, pb = int(phex[1:3], 16), int(phex[3:5], 16), int(phex[5:7], 16)
+    assert pr > pg + 30 and pr > pb + 30, f"primary not red-ish: {phex}"
 
     prompt = build(
         "red bearded knight in tunic with gold trim",
@@ -244,7 +255,11 @@ def test_edit_prompt_and_caption_fallback():
     )
     assert "APPEARANCE LOCK" in prompt
     assert "COLOR LOCK" in prompt
-    assert "garment" in prompt.lower() or "character colors" in prompt.lower()
+    assert "primary garment" in prompt.lower()
+    assert phex.upper() in prompt.upper() or "red" in prompt.lower()
+    low = prompt.lower()
+    assert "do not" in low or "do NOT" in prompt
+    assert "black" in low or "darken" in low or "blacken" in low
     assert "red bearded knight" in prompt
     assert "#" in prompt
     assert "sword" in prompt.lower()
@@ -269,6 +284,7 @@ def test_edit_prompt_and_caption_fallback():
     cap, pal2, backend = describe(rgb, style_bias="game sprite")
     assert isinstance(cap, str) and len(cap) > 5
     assert "#" in pal2
+    assert "primary garment" in cap.lower() or "red" in cap.lower()
     assert "fallback" in backend or "florence" in backend.lower()
     print(f"OK caption/prompt ({backend})")
 
@@ -296,10 +312,18 @@ def test_fit_pose_and_filtered_palette():
     for c in pal:
         lum = float(c @ np.array([0.299, 0.587, 0.114], dtype=np.float32))
         assert lum < 0.92, f"palette still has near-white: {c}"
+    # First center should be the saturated red (not blue accent / black)
+    c0 = pal[0]
+    r0, g0, b0 = float(c0[0]), float(c0[1]), float(c0[2])
+    assert r0 > g0 and r0 > b0, f"palette[0] should be red-dominant, got {c0}"
 
     hex_s = palette_hex_string(rgb, n_colors=4)
     assert "#" in hex_s
     assert "#FFFFFF" not in hex_s.upper()
+    primary_garment_color = caption_mod2.primary_garment_color
+    pname, phex = primary_garment_color(rgb, n_colors=4)
+    assert "red" in pname.lower(), f"expected red primary, got {pname!r}"
+    assert phex.startswith("#")
 
     # Source pose matching content height ~120px
     src = make_pose(
