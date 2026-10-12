@@ -1,13 +1,15 @@
 {
-  "last_node_id": 27,
+  "id": "9c475d16-7ba3-4d4e-94aa-8be4b5f6fdd5",
+  "revision": 0,
+  "last_node_id": 31,
   "last_link_id": 36,
   "nodes": [
     {
       "id": 1,
       "type": "UNETLoader",
       "pos": [
-        40,
-        40
+        332.34463263067454,
+        -121.82311683911603
       ],
       "size": [
         360,
@@ -16,7 +18,26 @@
       "flags": {},
       "order": 0,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "unet_name",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "nom_unet",
+          "widget": {
+            "name": "unet_name"
+          }
+        },
+        {
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "dtype_poids",
+          "widget": {
+            "name": "weight_dtype"
+          }
+        }
+      ],
       "outputs": [
         {
           "name": "MODEL",
@@ -24,6 +45,7 @@
           "links": [
             1
           ],
+          "localized_name": "MODÈLE",
           "slot_index": 0
         }
       ],
@@ -40,14 +62,18 @@
       "widgets_values": [
         "flux-2-klein-4b-fp8.safetensors",
         "default"
-      ]
+      ],
+      "widgets_values_named": {
+        "unet_name": "flux-2-klein-4b-fp8.safetensors",
+        "weight_dtype": "default"
+      }
     },
     {
       "id": 2,
       "type": "CLIPLoader",
       "pos": [
-        40,
-        160
+        335.2975903757215,
+        2.60630513433333
       ],
       "size": [
         360,
@@ -56,7 +82,36 @@
       "flags": {},
       "order": 1,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "clip_name",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "clip_name",
+          "widget": {
+            "name": "clip_name"
+          }
+        },
+        {
+          "name": "type",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "type",
+          "widget": {
+            "name": "type"
+          }
+        },
+        {
+          "name": "device",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "appareil",
+          "widget": {
+            "name": "device"
+          },
+          "shape": 7
+        }
+      ],
       "outputs": [
         {
           "name": "CLIP",
@@ -64,6 +119,7 @@
           "links": [
             2
           ],
+          "localized_name": "CLIP",
           "slot_index": 0
         }
       ],
@@ -81,14 +137,19 @@
         "qwen_3_4b.safetensors",
         "flux2",
         "default"
-      ]
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen_3_4b.safetensors",
+        "type": "flux2",
+        "device": "default"
+      }
     },
     {
       "id": 3,
       "type": "VAELoader",
       "pos": [
-        40,
-        300
+        335.2975903757214,
+        151.46535409892869
       ],
       "size": [
         360,
@@ -97,7 +158,17 @@
       "flags": {},
       "order": 2,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "vae_name",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "nom_vae",
+          "widget": {
+            "name": "vae_name"
+          }
+        }
+      ],
       "outputs": [
         {
           "name": "VAE",
@@ -105,6 +176,7 @@
           "links": [
             3
           ],
+          "localized_name": "VAE",
           "slot_index": 0
         }
       ],
@@ -120,23 +192,45 @@
       },
       "widgets_values": [
         "flux2-vae.safetensors"
-      ]
+      ],
+      "widgets_values_named": {
+        "vae_name": "flux2-vae.safetensors"
+      }
     },
     {
       "id": 4,
       "type": "LoadImage",
       "pos": [
-        40,
-        400
+        -472.341156166366,
+        370.40501384634035
       ],
       "size": [
         320,
-        314
+        314.0
       ],
       "flags": {},
       "order": 3,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "image",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "image",
+          "widget": {
+            "name": "image"
+          }
+        },
+        {
+          "name": "upload",
+          "type": "IMAGEUPLOAD",
+          "link": null,
+          "localized_name": "choisissez le fichier à télécharger",
+          "widget": {
+            "name": "upload"
+          }
+        }
+      ],
       "outputs": [
         {
           "name": "IMAGE",
@@ -145,12 +239,14 @@
             6,
             33
           ],
+          "localized_name": "IMAGE",
           "slot_index": 0
         },
         {
           "name": "MASK",
           "type": "MASK",
           "links": null,
+          "localized_name": "MASQUE",
           "slot_index": 1
         }
       ],
@@ -161,27 +257,102 @@
       "widgets_values": [
         "Example_Comfy.png",
         "image"
-      ]
+      ],
+      "widgets_values_named": {
+        "image": "Example_Comfy.png",
+        "upload": "image"
+      }
     },
     {
       "id": 26,
       "type": "DWPreprocessor",
       "pos": [
-        400,
-        280
+        -68.04661426120819,
+        463.0844931461205
       ],
       "size": [
         315,
-        200
+        222
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 33
+          "link": 33,
+          "localized_name": "image"
+        },
+        {
+          "name": "detect_hand",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "detect_hand",
+          "widget": {
+            "name": "detect_hand"
+          },
+          "shape": 7
+        },
+        {
+          "name": "detect_body",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "detect_body",
+          "widget": {
+            "name": "detect_body"
+          },
+          "shape": 7
+        },
+        {
+          "name": "detect_face",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "detect_face",
+          "widget": {
+            "name": "detect_face"
+          },
+          "shape": 7
+        },
+        {
+          "name": "resolution",
+          "type": "INT",
+          "link": null,
+          "localized_name": "resolution",
+          "widget": {
+            "name": "resolution"
+          },
+          "shape": 7
+        },
+        {
+          "name": "bbox_detector",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "bbox_detector",
+          "widget": {
+            "name": "bbox_detector"
+          },
+          "shape": 7
+        },
+        {
+          "name": "pose_estimator",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "pose_estimator",
+          "widget": {
+            "name": "pose_estimator"
+          },
+          "shape": 7
+        },
+        {
+          "name": "scale_stick_for_xinsr_cn",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "scale_stick_for_xinsr_cn",
+          "widget": {
+            "name": "scale_stick_for_xinsr_cn"
+          },
+          "shape": 7
         }
       ],
       "outputs": [
@@ -191,6 +362,7 @@
           "links": [
             35
           ],
+          "localized_name": "IMAGE",
           "slot_index": 0
         },
         {
@@ -199,6 +371,7 @@
           "links": [
             34
           ],
+          "localized_name": "POINT CLÉ DE POSE",
           "slot_index": 1
         }
       ],
@@ -214,146 +387,182 @@
         "yolox_l.onnx",
         "dw-ll_ucoco_384.onnx",
         "disable"
-      ]
+      ],
+      "widgets_values_named": {
+        "detect_hand": "enable",
+        "detect_body": "enable",
+        "detect_face": "enable",
+        "resolution": 1024,
+        "bbox_detector": "yolox_l.onnx",
+        "pose_estimator": "dw-ll_ucoco_384.onnx",
+        "scale_stick_for_xinsr_cn": "disable"
+      }
     },
     {
       "id": 5,
       "type": "CP_PoseTransferPrep",
       "pos": [
-        420,
-        500
+        306.31039460963376,
+        368.59256027462476
       ],
       "size": [
         360,
-        360
+        576
       ],
       "flags": {},
-      "order": 5,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 6
-        },
-        {
-          "name": "animation",
-          "type": "COMBO",
-          "widget": {
-            "name": "animation"
-          },
-          "link": null
-        },
-        {
-          "name": "orientation",
-          "type": "COMBO",
-          "widget": {
-            "name": "orientation"
-          },
-          "link": null
-        },
-        {
-          "name": "frame",
-          "type": "COMBO",
-          "widget": {
-            "name": "frame"
-          },
-          "link": null
-        },
-        {
-          "name": "prop",
-          "type": "COMBO",
-          "widget": {
-            "name": "prop"
-          },
-          "link": null
-        },
-        {
-          "name": "align_to_source",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "align_to_source"
-          },
-          "link": null
-        },
-        {
-          "name": "auto_caption",
-          "type": "BOOLEAN",
-          "widget": {
-            "name": "auto_caption"
-          },
-          "link": null
+          "link": 6,
+          "localized_name": "image"
         },
         {
           "name": "pose_keypoint",
           "type": "POSE_KEYPOINT",
-          "link": 34
+          "link": 34,
+          "localized_name": "pose_keypoint",
+          "shape": 7
         },
         {
           "name": "dwpose_image",
           "type": "IMAGE",
-          "link": 35
-        },
-        {
-          "name": "prop2",
-          "type": "COMBO",
-          "widget": {
-            "name": "prop2"
-          },
-          "link": null
-        },
-        {
-          "name": "caption",
-          "type": "STRING",
-          "widget": {
-            "name": "caption"
-          },
-          "link": null
-        },
-        {
-          "name": "extra",
-          "type": "STRING",
-          "widget": {
-            "name": "extra"
-          },
-          "link": null
+          "link": 35,
+          "localized_name": "dwpose_image",
+          "shape": 7
         },
         {
           "name": "source_pose",
           "type": "POSE",
-          "link": null
+          "link": null,
+          "localized_name": "source_pose",
+          "shape": 7
+        },
+        {
+          "name": "animation",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "animation",
+          "widget": {
+            "name": "animation"
+          }
+        },
+        {
+          "name": "orientation",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "orientation",
+          "widget": {
+            "name": "orientation"
+          }
+        },
+        {
+          "name": "frame",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "frame",
+          "widget": {
+            "name": "frame"
+          }
+        },
+        {
+          "name": "prop",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "prop",
+          "widget": {
+            "name": "prop"
+          }
+        },
+        {
+          "name": "align_to_source",
+          "type": "BOOLEAN",
+          "link": null,
+          "localized_name": "align_to_source",
+          "widget": {
+            "name": "align_to_source"
+          }
+        },
+        {
+          "name": "auto_caption",
+          "type": "BOOLEAN",
+          "link": null,
+          "localized_name": "auto_caption",
+          "widget": {
+            "name": "auto_caption"
+          }
+        },
+        {
+          "name": "prop2",
+          "type": "COMBO",
+          "link": null,
+          "localized_name": "prop2",
+          "widget": {
+            "name": "prop2"
+          },
+          "shape": 7
+        },
+        {
+          "name": "caption",
+          "type": "STRING",
+          "link": null,
+          "localized_name": "caption",
+          "widget": {
+            "name": "caption"
+          },
+          "shape": 7
+        },
+        {
+          "name": "extra",
+          "type": "STRING",
+          "link": null,
+          "localized_name": "extra",
+          "widget": {
+            "name": "extra"
+          },
+          "shape": 7
         },
         {
           "name": "pose_list",
           "type": "STRING",
+          "link": null,
+          "localized_name": "pose_list",
           "widget": {
             "name": "pose_list"
           },
-          "link": null
+          "shape": 7
         },
         {
           "name": "pose_file",
           "type": "STRING",
+          "link": null,
+          "localized_name": "pose_file",
           "widget": {
             "name": "pose_file"
           },
-          "link": null
+          "shape": 7
         },
         {
           "name": "width",
           "type": "INT",
+          "link": null,
+          "localized_name": "width",
           "widget": {
             "name": "width"
           },
-          "link": null
+          "shape": 7
         },
         {
           "name": "height",
           "type": "INT",
+          "link": null,
+          "localized_name": "height",
           "widget": {
             "name": "height"
           },
-          "link": null
+          "shape": 7
         }
       ],
       "outputs": [
@@ -363,18 +572,21 @@
           "links": [
             8
           ],
+          "localized_name": "guide",
           "slot_index": 0
         },
         {
           "name": "edit_prompt",
           "type": "STRING",
           "links": null,
+          "localized_name": "edit_prompt",
           "slot_index": 1
         },
         {
           "name": "pose",
           "type": "POSE",
           "links": null,
+          "localized_name": "pose",
           "slot_index": 2
         },
         {
@@ -383,6 +595,7 @@
           "links": [
             10
           ],
+          "localized_name": "source_pose",
           "slot_index": 3
         },
         {
@@ -391,18 +604,21 @@
           "links": [
             32
           ],
+          "localized_name": "preview_pose",
           "slot_index": 4
         },
         {
           "name": "caption",
           "type": "STRING",
           "links": null,
+          "localized_name": "caption",
           "slot_index": 5
         },
         {
           "name": "caption_backend",
           "type": "STRING",
           "links": null,
+          "localized_name": "caption_backend",
           "slot_index": 6
         },
         {
@@ -411,12 +627,14 @@
           "links": [
             9
           ],
+          "localized_name": "edit_prompts",
           "slot_index": 7
         },
         {
           "name": "pose_names",
           "type": "STRING",
           "links": null,
+          "localized_name": "pose_names",
           "slot_index": 8
         },
         {
@@ -425,12 +643,14 @@
           "links": [
             7
           ],
+          "localized_name": "image_batch",
           "slot_index": 9
         },
         {
           "name": "count",
           "type": "INT",
           "links": null,
+          "localized_name": "count",
           "slot_index": 10
         }
       ],
@@ -439,11 +659,11 @@
         "Node name for S&R": "CP_PoseTransferPrep"
       },
       "widgets_values": [
-        "ALL",
-        "ALL",
+        "slow_run",
+        "LEFT",
         "ALL",
         "none",
-        true,
+        false,
         true,
         "none",
         "",
@@ -454,11 +674,11 @@
         0
       ],
       "widgets_values_named": {
-        "animation": "ALL",
-        "orientation": "ALL",
+        "animation": "slow_run",
+        "orientation": "LEFT",
         "frame": "ALL",
         "prop": "none",
-        "align_to_source": true,
+        "align_to_source": false,
         "auto_caption": true,
         "prop2": "none",
         "caption": "",
@@ -473,57 +693,71 @@
       "id": 6,
       "type": "PreviewImage",
       "pos": [
-        420,
-        900
+        861.6711943714672,
+        948.9017757350305
       ],
       "size": [
-        280,
-        260
+        334.5496485720138,
+        274.42710440418705
       ],
       "flags": {},
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 10
+          "link": 10,
+          "localized_name": "images"
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "localized_name": "images"
+        }
+      ],
       "title": "source_pose (base + squelette detecte)",
       "properties": {
         "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
+      }
     },
     {
       "id": 25,
       "type": "PreviewImage",
       "pos": [
-        720,
-        900
+        862.0769890501385,
+        642.7925749707717
       ],
       "size": [
-        280,
+        334.1119140625,
         260
       ],
       "flags": {},
-      "order": 6,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 32
+          "link": 32,
+          "localized_name": "images"
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "localized_name": "images"
+        }
+      ],
       "title": "guides (squelettes seuls, live pose en cours)",
       "properties": {
         "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
+      }
     },
     {
       "id": 7,
@@ -534,97 +768,110 @@
       ],
       "size": [
         360,
-        340
+        514
       ],
       "flags": {},
-      "order": 7,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
           "name": "model",
           "type": "MODEL",
-          "link": 1
+          "link": 1,
+          "localized_name": "model"
         },
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 2
+          "link": 2,
+          "localized_name": "clip"
         },
         {
           "name": "vae",
           "type": "VAE",
-          "link": 3
+          "link": 3,
+          "localized_name": "vae"
         },
         {
           "name": "image_batch",
           "type": "IMAGE",
-          "link": 7
+          "link": 7,
+          "localized_name": "image_batch"
         },
         {
           "name": "guide",
           "type": "IMAGE",
-          "link": 8
+          "link": 8,
+          "localized_name": "guide"
         },
         {
           "name": "edit_prompts",
           "type": "STRING",
-          "link": 9
+          "link": 9,
+          "localized_name": "edit_prompts"
         },
         {
           "name": "seed",
           "type": "INT",
+          "link": null,
+          "localized_name": "seed",
           "widget": {
             "name": "seed"
-          },
-          "link": null
+          }
         },
         {
           "name": "steps",
           "type": "INT",
+          "link": null,
+          "localized_name": "steps",
           "widget": {
             "name": "steps"
-          },
-          "link": null
+          }
         },
         {
           "name": "cfg",
           "type": "FLOAT",
+          "link": null,
+          "localized_name": "cfg",
           "widget": {
             "name": "cfg"
-          },
-          "link": null
+          }
         },
         {
           "name": "sampler_name",
           "type": "COMBO",
+          "link": null,
+          "localized_name": "sampler_name",
           "widget": {
             "name": "sampler_name"
-          },
-          "link": null
+          }
         },
         {
           "name": "megapixels",
           "type": "FLOAT",
+          "link": null,
+          "localized_name": "megapixels",
           "widget": {
             "name": "megapixels"
-          },
-          "link": null
+          }
         },
         {
           "name": "pose_weight",
           "type": "INT",
+          "link": null,
+          "localized_name": "pose_weight",
           "widget": {
             "name": "pose_weight"
-          },
-          "link": null
+          }
         },
         {
           "name": "filename_prefix",
           "type": "STRING",
+          "link": null,
+          "localized_name": "filename_prefix",
           "widget": {
             "name": "filename_prefix"
-          },
-          "link": null
+          }
         }
       ],
       "outputs": [
@@ -635,6 +882,7 @@
             11,
             12
           ],
+          "localized_name": "images",
           "slot_index": 0
         },
         {
@@ -643,12 +891,14 @@
           "links": [
             36
           ],
+          "localized_name": "images_with_guides",
           "slot_index": 1
         },
         {
           "name": "count",
           "type": "INT",
           "links": null,
+          "localized_name": "count",
           "slot_index": 2
         }
       ],
@@ -659,18 +909,18 @@
       "widgets_values": [
         42,
         4,
-        1.0,
+        1,
         "euler",
-        1.0,
+        1,
         2,
         "pose_transfer_flux_klein"
       ],
       "widgets_values_named": {
         "seed": 42,
         "steps": 4,
-        "cfg": 1.0,
+        "cfg": 1,
         "sampler_name": "euler",
-        "megapixels": 1.0,
+        "megapixels": 1,
         "pose_weight": 2,
         "filename_prefix": "pose_transfer_flux_klein"
       }
@@ -679,109 +929,148 @@
       "id": 8,
       "type": "PreviewImage",
       "pos": [
-        1260,
-        80
+        1252.2842697008923,
+        162.41665639093395
       ],
       "size": [
         360,
         360
       ],
       "flags": {},
-      "order": 8,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 12
+          "link": 12,
+          "localized_name": "images"
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "localized_name": "images"
+        }
+      ],
       "title": "Results (images seules)",
       "properties": {
         "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
+      }
     },
     {
       "id": 27,
       "type": "PreviewImage",
       "pos": [
-        1640,
-        80
+        1254.7970793750599,
+        568.231079479891
       ],
       "size": [
         360,
         360
       ],
       "flags": {},
-      "order": 8,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 36
+          "link": 36,
+          "localized_name": "images"
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "localized_name": "images"
+        }
+      ],
       "title": "Results + guides (QC pose)",
       "properties": {
         "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
+      }
     },
     {
       "id": 9,
       "type": "SaveImage",
       "pos": [
-        1260,
-        480
+        1259.1964362185904,
+        106.83948958960399
       ],
       "size": [
         360,
         300
       ],
-      "flags": {},
-      "order": 9,
+      "flags": {
+        "collapsed": true
+      },
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 11
+          "link": 11,
+          "localized_name": "images"
+        },
+        {
+          "name": "filename_prefix",
+          "type": "STRING",
+          "link": null,
+          "localized_name": "préfixe_du_nom_de_fichier",
+          "widget": {
+            "name": "filename_prefix"
+          }
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": null,
+          "localized_name": "images"
+        }
+      ],
       "properties": {
         "Node name for S&R": "SaveImage"
       },
       "widgets_values": [
         "pose_transfer_flux_klein_all"
-      ]
+      ],
+      "widgets_values_named": {
+        "filename_prefix": "pose_transfer_flux_klein_all"
+      }
     },
     {
-      "id": 10,
+      "id": 28,
       "type": "Note",
       "pos": [
-        40,
-        760
+        857.6469124072922,
+        -132.31233208966685
       ],
       "size": [
-        340,
-        340
+        323.7233686896046,
+        113.08174991360698
       ],
       "flags": {},
-      "order": 10,
+      "order": 4,
       "mode": 0,
       "inputs": [],
       "outputs": [],
-      "properties": {
-        "text": ""
-      },
+      "properties": {},
       "widgets_values": [
-        "CharacterPose \u2014 Flux.2 Klein (Prep)\n\n1 Queue = N poses SEQUENTIELLES.\nPrep source_pose = base + squelette detecte (fixe).\nPrep preview_pose = sticks seuls ;\n  live pose en cours pendant Klein.\nKlein images = resultats nets (progressifs).\nKlein images_with_guides = QC pose.\npose_weight: 1 soft \u2026 2 defaut \u2026 4 pose forte.\nRedemarrer Comfy apres update nodes.\n"
-      ]
+        "[Steps]\nThe number of steps computed for each picture\nRecommended value: 4 to 10\n\n[pose_weight]\nThe weight balance between pose and original picture\nRecommended value: 2 to 4"
+      ],
+      "widgets_values_named": {
+        "text": "[Steps]\nThe number of steps computed for each picture\nRecommended value: 4 to 10\n\n[pose_weight]\nThe weight balance between pose and original picture\nRecommended value: 2 to 4"
+      },
+      "color": "#432",
+      "bgcolor": "#653"
     }
   ],
   "links": [
@@ -830,7 +1119,7 @@
       26,
       1,
       5,
-      7,
+      1,
       "POSE_KEYPOINT"
     ],
     [
@@ -838,7 +1127,7 @@
       26,
       0,
       5,
-      8,
+      2,
       "IMAGE"
     ],
     [
@@ -911,26 +1200,24 @@
       "id": 1,
       "title": "Modeles Flux.2 Klein",
       "bounding": [
-        20,
-        0,
-        400,
-        380
+        312.3446326306744,
+        -201.688236770825,
+        397.0470422549531,
+        424.2947762110972
       ],
       "color": "#3f789e",
-      "font_size": 24,
       "flags": {}
     },
     {
       "id": 2,
       "title": "CharacterPose Prep",
       "bounding": [
-        400,
-        360,
-        420,
-        700
+        -500.6576477171255,
+        278.7931641110888,
+        1205.4915634542356,
+        673.4233217180927
       ],
       "color": "#88A",
-      "font_size": 24,
       "flags": {}
     },
     {
@@ -939,38 +1226,46 @@
       "bounding": [
         820,
         0,
-        860,
-        820
+        818.9272868483667,
+        1239.3749257655236
       ],
       "color": "#3f789e",
-      "font_size": 24,
       "flags": {}
     }
   ],
   "config": {},
   "extra": {
     "info": {
-      "name": "CharacterPose \u2014 Flux.2 Klein Pose Transfer (Prep)",
+      "name": "CharacterPose — Flux.2 Klein Pose Transfer (Prep)",
       "version": "0.6.0",
-      "description": "Prep filters \u2192 CP_KleinPoseBatch (per-prompt sequential + progressive preview)."
+      "description": "Prep filters → CP_KleinPoseBatch (per-prompt sequential + progressive preview)."
+    },
+    "ds": {
+      "scale": 0.8390545288824222,
+      "offset": [
+        933.0532459001683,
+        500.7379337698269
+      ]
     }
   },
-  "models": [
-    {
-      "name": "flux-2-klein-4b-fp8.safetensors",
-      "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors",
-      "directory": "diffusion_models"
-    },
-    {
-      "name": "qwen_3_4b.safetensors",
-      "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors",
-      "directory": "text_encoders"
-    },
-    {
-      "name": "flux2-vae.safetensors",
-      "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
-      "directory": "vae"
-    }
-  ],
+  "extensions": {
+    "models": [
+      {
+        "name": "flux-2-klein-4b-fp8.safetensors",
+        "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-4b-fp8/resolve/main/flux-2-klein-4b-fp8.safetensors",
+        "directory": "diffusion_models"
+      },
+      {
+        "name": "qwen_3_4b.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors",
+        "directory": "text_encoders"
+      },
+      {
+        "name": "flux2-vae.safetensors",
+        "url": "https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors",
+        "directory": "vae"
+      }
+    ]
+  },
   "version": 0.4
 }
