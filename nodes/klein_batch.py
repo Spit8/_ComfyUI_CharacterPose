@@ -410,7 +410,7 @@ class KleinPoseBatch:
     RETURN_TYPES = ("IMAGE", "IMAGE", "INT")
     RETURN_NAMES = ("images", "images_with_guides", "count")
     FUNCTION = "run"
-    CATEGORY = "characterpose"
+    CATEGORY = "CharacterPose"
     OUTPUT_NODE = True
 
     def run(
@@ -554,5 +554,5 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "CP_KleinPoseBatch": "Klein Pose Batch (sequential)",
+    "CP_KleinPoseBatch": "Klein Pose Batch",
 }

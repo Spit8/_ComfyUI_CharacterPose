@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-# Orbit params around look_at (Y-up). ISO matches pose3d SE/SW/NE/NW naming.
+# Orbit params around look_at (Y-up). ISO view labels: SE/SO/NE/NO.
 CAMERA_PRESETS: dict[str, dict[str, float]] = {
     "SE": {"yaw": -45.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},
     "SO": {"yaw": 45.0, "pitch": -15.0, "roll": 0.0, "distance": 3.2},  # SW

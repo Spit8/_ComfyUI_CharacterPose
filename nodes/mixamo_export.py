@@ -143,7 +143,7 @@ class MixamoPoseExport:
     RETURN_TYPES = ("STRING", "INT", "IMAGE")
     RETURN_NAMES = ("pose_list", "count", "preview")
     FUNCTION = "export"
-    CATEGORY = "CharacterPose/Pose"
+    CATEGORY = "CharacterPose"
     OUTPUT_NODE = True
 
     @classmethod

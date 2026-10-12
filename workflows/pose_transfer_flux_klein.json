@@ -468,15 +468,6 @@
           }
         },
         {
-          "name": "prop",
-          "type": "COMBO",
-          "link": null,
-          "localized_name": "prop",
-          "widget": {
-            "name": "prop"
-          }
-        },
-        {
           "name": "align_to_source",
           "type": "BOOLEAN",
           "link": null,
@@ -493,16 +484,6 @@
           "widget": {
             "name": "auto_caption"
           }
-        },
-        {
-          "name": "prop2",
-          "type": "COMBO",
-          "link": null,
-          "localized_name": "prop2",
-          "widget": {
-            "name": "prop2"
-          },
-          "shape": 7
         },
         {
           "name": "caption",
@@ -662,10 +643,8 @@
         "slow_run",
         "LEFT",
         "ALL",
-        "none",
         false,
         true,
-        "none",
         "",
         "",
         "",
@@ -677,10 +656,8 @@
         "animation": "slow_run",
         "orientation": "LEFT",
         "frame": "ALL",
-        "prop": "none",
         "align_to_source": false,
         "auto_caption": true,
-        "prop2": "none",
         "caption": "",
         "extra": "",
         "pose_list": "",

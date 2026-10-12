@@ -304,7 +304,6 @@ def write_flux_klein() -> Path:
                     "orientation", "COMBO", widget="orientation", localized="orientation"
                 ),
                 _sock("frame", "COMBO", widget="frame", localized="frame"),
-                _sock("prop", "COMBO", widget="prop", localized="prop"),
                 _sock(
                     "align_to_source",
                     "BOOLEAN",
@@ -317,7 +316,6 @@ def write_flux_klein() -> Path:
                     widget="auto_caption",
                     localized="auto_caption",
                 ),
-                _sock("prop2", "COMBO", widget="prop2", shape=7, localized="prop2"),
                 _sock("caption", "STRING", widget="caption", shape=7, localized="caption"),
                 _sock("extra", "STRING", widget="extra", shape=7, localized="extra"),
                 _sock(
@@ -376,10 +374,8 @@ def write_flux_klein() -> Path:
                 "slow_run",
                 "LEFT",
                 "ALL",
-                "none",
                 False,
                 True,
-                "none",
                 "",
                 "",
                 "",
@@ -391,10 +387,8 @@ def write_flux_klein() -> Path:
                 "animation": "slow_run",
                 "orientation": "LEFT",
                 "frame": "ALL",
-                "prop": "none",
                 "align_to_source": False,
                 "auto_caption": True,
-                "prop2": "none",
                 "caption": "",
                 "extra": "",
                 "pose_list": "",
