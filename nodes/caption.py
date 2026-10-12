@@ -236,6 +236,21 @@ def view_hint_text(code: str | None) -> str:
     return _VIEW_HINTS.get(norm, "")
 
 
+def _humanize_animation(anim: str | None) -> str:
+    """Turn filename anim token into a short prompt phrase (e.g. crawling)."""
+    if not anim:
+        return ""
+    s = str(anim).strip().replace("-", "_")
+    if not s:
+        return ""
+    # Drop trailing numeric frame crumbs if any slipped in
+    s = re.sub(r"_+\d+$", "", s)
+    words = [w for w in s.replace("_", " ").split() if w]
+    if not words:
+        return ""
+    return " ".join(words).lower()
+
+
 def build_edit_prompt(
     caption: str,
     *,
@@ -244,6 +259,7 @@ def build_edit_prompt(
     extra: str = "",
     view_hint: str = "",
     view_code: str | None = None,
+    animation: str | None = None,
     include_anti_bones: bool = True,
 ) -> str:
     """Assemble an edit prompt that leads with appearance / color lock."""
@@ -251,6 +267,7 @@ def build_edit_prompt(
     pal = (palette_hex or "").strip()
     vcode = _normalize_view_code(view_code) if view_code else None
     is_back = vcode in _BACK_VIEW_CODES
+    action = _humanize_animation(animation)
 
     # Most saturated chromatic swatch from palette (extract_palette already sat-sorts)
     primary_name, primary_hex = "", ""
@@ -311,6 +328,18 @@ def build_edit_prompt(
         "Identity and colors must stay identical to the description above — "
         "preserve reference garment hues pixel-faithfully."
     )
+    # POSE LOCK — kill standing/T-pose ghosting when the stick shows another action
+    pose_lock = (
+        "POSE LOCK — fully adopt the stick-figure body pose; one single silhouette only. "
+        "Do NOT keep any remnant of a standing, idle, or T-pose body. "
+        "No double body, no ghost limbs, no superimposed second character, "
+        "no duplicate heads or torsos — the stick guide dictates the entire posture."
+    )
+    if action:
+        pose_lock += (
+            f" Body action: {action} — fully reposed into this action matching the stick guide."
+        )
+    parts.append(pose_lock)
     vh = (view_hint or "").strip()
     if vh:
         lock = (
@@ -669,6 +698,7 @@ class BuildEditPrompt:
                 "palette_hex": ("STRING", {"default": ""}),
                 "prop_hint": ("STRING", {"default": "", "multiline": True}),
                 "extra": ("STRING", {"default": "", "multiline": True}),
+                "animation": ("STRING", {"default": ""}),
                 "include_anti_bones": ("BOOLEAN", {"default": True}),
             },
         }
@@ -684,6 +714,7 @@ class BuildEditPrompt:
         palette_hex="",
         prop_hint="",
         extra="",
+        animation="",
         include_anti_bones=True,
     ):
         return (
@@ -692,6 +723,7 @@ class BuildEditPrompt:
                 palette_hex=palette_hex,
                 prop_hint=prop_hint,
                 extra=extra,
+                animation=(animation or "").strip() or None,
                 include_anti_bones=bool(include_anti_bones),
             ),
         )

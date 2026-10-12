@@ -377,7 +377,9 @@ class KleinPoseBatch:
 
                 lat1 = _call("VAEEncode", pixels=scaled_sprite, vae=vae)[0]
                 lat2 = _call("VAEEncode", pixels=scaled_guide, vae=vae)[0]
+                # Sprite once (identity/colors), guide twice (overweight pose vs standing ghost)
                 positive = _call("ReferenceLatent", conditioning=positive, latent=lat1)[0]
+                positive = _call("ReferenceLatent", conditioning=positive, latent=lat2)[0]
                 positive = _call("ReferenceLatent", conditioning=positive, latent=lat2)[0]
 
                 empty = _call(

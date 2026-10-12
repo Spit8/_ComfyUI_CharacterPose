@@ -264,6 +264,22 @@ def test_edit_prompt_and_caption_fallback():
     assert "#" in prompt
     assert "sword" in prompt.lower()
     assert "NEVER draw bones" in prompt or "never draw bones" in prompt.lower()
+    assert "POSE LOCK" in prompt
+    assert "single silhouette" in prompt.lower() or "one single silhouette" in prompt.lower()
+
+    crawl = build(
+        "red bearded knight in tunic with gold trim",
+        palette_hex=pal,
+        view_hint=caption_mod2.view_hint_text("RIGHT"),
+        view_code="RIGHT",
+        animation="crawling",
+    )
+    cl = crawl.lower()
+    assert "POSE LOCK" in crawl
+    assert "crawling" in cl
+    assert "body action" in cl
+    assert "duplicate" in cl or "double body" in cl or "ghost" in cl
+    assert "standing" in cl or "t-pose" in cl
 
     back = build(
         "red bearded knight in tunic with gold trim",
@@ -371,6 +387,86 @@ def test_fit_pose_and_filtered_palette():
     print("OK fit_pose + filtered palette")
 
 
+def test_horizontal_fit_crawl():
+    """Wide crawl pose: scale stays bounded; ankles near content-box ground."""
+    warp_mod2 = importlib.import_module(f"{PKG}.nodes.warp")
+    fit = warp_mod2.fit_pose_to_source
+    assert warp_mod2._is_horizontal_pose  # helper used by fit
+
+    # Standing source (tall)
+    src = make_pose(
+        [
+            [128, 40, 1],   # nose
+            [128, 70, 1],   # neck
+            [150, 70, 1],
+            [160, 110, 1],
+            [165, 150, 1],
+            [106, 70, 1],
+            [96, 110, 1],
+            [91, 150, 1],
+            [140, 150, 1],
+            [142, 190, 1],
+            [144, 220, 1],  # R ankle
+            [116, 150, 1],
+            [114, 190, 1],
+            [112, 220, 1],  # L ankle
+            [135, 35, 1],
+            [121, 35, 1],
+            [140, 38, 1],
+            [116, 38, 1],
+        ],
+        width=256,
+        height=256,
+        name="src_stand",
+    )
+    # Crawl-like: wide bbox (horizontal body)
+    crawl = make_pose(
+        [
+            [200, 140, 1],  # nose forward
+            [160, 145, 1],  # neck
+            [170, 130, 1],
+            [210, 125, 1],
+            [230, 140, 1],
+            [150, 160, 1],
+            [120, 170, 1],
+            [90, 180, 1],
+            [155, 175, 1],
+            [130, 185, 1],
+            [100, 190, 1],  # R ankle (ground)
+            [145, 170, 1],
+            [115, 180, 1],
+            [85, 190, 1],   # L ankle
+            [205, 135, 1],
+            [195, 135, 1],
+            [210, 138, 1],
+            [190, 138, 1],
+        ],
+        width=256,
+        height=256,
+        name="crawl",
+    )
+    assert warp_mod2._is_horizontal_pose(crawl)
+
+    box = (100, 80, 160, 220)  # standing character content
+    fitted = fit(crawl, src, content_box=box)
+    # Scale must stay within fit clamps (no explosion)
+    src_ext = warp_mod2._pose_extent(src)
+    fit_ext = warp_mod2._pose_extent(fitted)
+    assert src_ext and fit_ext
+    ratio = fit_ext / src_ext
+    assert 0.2 <= ratio <= 3.6, f"extent ratio out of bounds: {ratio}"
+
+    # After bottom-aligned contain: ankles in lower half of canvas
+    low = warp_mod2._lowest_point(fitted)
+    assert low is not None
+    canvas_h = float(fitted.get("height", 256))
+    assert float(low[1]) > canvas_h * 0.55, f"ankle not in lower half: {low[1]} / {canvas_h}"
+    # Still near padded bottom (margin ~6%)
+    assert float(low[1]) < canvas_h * 0.98, f"ankle past canvas: {low[1]}"
+
+    print("OK horizontal fit crawl")
+
+
 def test_node_mappings_import():
     root_mod = importlib.import_module(PKG)
     keys = set(root_mod.NODE_CLASS_MAPPINGS)
@@ -419,6 +515,7 @@ if __name__ == "__main__":
     test_pose_from_prompt_parse_clamp()
     test_edit_prompt_and_caption_fallback()
     test_fit_pose_and_filtered_palette()
+    test_horizontal_fit_crawl()
     test_node_mappings_import()
     test_parse_edit_prompts()
     print("All smoke tests passed.")

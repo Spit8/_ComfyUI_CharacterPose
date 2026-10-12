@@ -25,6 +25,7 @@ from .pose import (
     list_animations,
     list_frames_present,
     list_views_present,
+    parse_pose_filename,
     poses_dir_fingerprint,
     _resolve_pose_path,
 )
@@ -543,6 +544,8 @@ class PoseTransferPrep:
             preview = draw_openpose(pose, width=w, height=h)
             view_code = resolve_view_code(pose, pose_file=fname)
             vhint = view_hint_text(view_code)
+            parsed = parse_pose_filename(fname)
+            anim_name = parsed[0] if parsed else entry.get("anim")
             prompts.append(
                 build_edit_prompt(
                     resolved_caption,
@@ -551,6 +554,7 @@ class PoseTransferPrep:
                     extra=extra,
                     view_hint=vhint,
                     view_code=view_code,
+                    animation=anim_name,
                 )
             )
             guides.append(preview)
