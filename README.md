@@ -54,13 +54,14 @@ Prep auto-captions the sprite (Florence-2 when available), injects a **COLOR LOC
 
 Import animations from **[Mixamo](https://www.mixamo.com/)** (or any Mixamo-compatible **`.fbx`** rig) and project them into OpenPose COCO-18 **`.pose`** files. One download → a reusable 2D pose library for every character you own.
 
-### Camera packs: 4 / 6 / 8 views
+### Camera packs: 4 iso · 4 cardinal · 6 · 8 views
 
 | Mode | Views | Best for |
 |------|--------|----------|
 | **`4_iso`** | SE · SO · NE · NO | Classic isometric / RTS sheets |
+| **`4_cardinal`** | LEFT · RIGHT · TOP · BOT | Orthographic side / front / back profiles |
 | **`6`** | 4 ISO + TOP + BOT | ISO + front / back |
-| **`8`** | 4 ISO + LEFT · RIGHT · TOP · BOT | Full cardinal + isometric set |
+| **`8`** | 4 ISO + 4 cardinal (LEFT · RIGHT · TOP · BOT) | Full isometric + cardinal set |
 
 ### Animation density: 10 / 30 / 60 frames per view
 
@@ -201,7 +202,7 @@ Open:
 **Flow**
 
 1. Drop Mixamo `.fbx` files into `ComfyUI/input/` or `ComfyUI/input/mixamo/`.
-2. **`CP_MixamoPoseExport`** — pick the FBX, set `orientations` (`4_iso` / `6` / `8`) and `frames_per_view` (e.g. 10 / 30 / 60).
+2. **`CP_MixamoPoseExport`** — pick the FBX, set `orientations` (`4_iso` / `4_cardinal` / `6` / `8`) and `frames_per_view` (e.g. 10 / 30 / 60).
 3. Export writes `{anim}_{VIEW}_{ii}.pose` into the package `poses/` folder and returns a `pose_list`.
 4. **`CP_PoseLibraryLoad`** + **`CP_ApplyPose`** — preview any `.pose` as an OpenPose guide image.
 
@@ -216,7 +217,7 @@ Same exporter under the hood — pick Comfy or CLI.
 1. Install **pufbx** (see [Install](#2-python-dependencies)).
 2. Put Mixamo FBX under `ComfyUI/input/` (or `input/mixamo/`).
 3. Add **Mixamo Pose Export**, choose:
-   - **`orientations`**: `4_iso` · `6` · `8` (or `4_cardinal`)
+   - **`orientations`**: `4_iso` · `4_cardinal` · `6` · `8`
    - **`frames_per_view`**: e.g. `10` / `30` / `60`
    - **`out_dir`**: `poses` (default — package library)
    - **`write_png`**: optional debug stick PNGs
