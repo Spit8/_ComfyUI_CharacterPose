@@ -1,8 +1,8 @@
-"""Geometric warp from source pose to target pose — identity-preserving path.
+"""Pose fit and skeleton overlay for Prep preview guides.
 
-TPS (global thin-plate) is unstable on side-view skeletons (near-collinear
-keypoints) and melts sprites into multi-head smears. Default is Delaunay
-piecewise-affine, which keeps the warp local to each body triangle.
+Uniform scale/translate (fit_pose_to_source) aligns library poses to the
+source character; blend_skeleton_onto_image composites OpenPose sticks
+onto the sprite without geometric image warp.
 """
 
 from __future__ import annotations
@@ -10,16 +10,11 @@ from __future__ import annotations
 import copy
 
 import numpy as np
-from scipy.interpolate import RBFInterpolator
-from scipy.spatial import Delaunay
 
 try:
     import cv2
 except Exception:  # pragma: no cover
     cv2 = None
-
-from ..formats.pose_io import LIMB_PAIRS
-from ..utils import draw_openpose, np_to_tensor, tensor_to_np
 
 # OpenPose COCO indices
 _NECK = 1
@@ -27,19 +22,6 @@ _R_HIP = 8
 _L_HIP = 11
 _R_SHOULDER = 2
 _L_SHOULDER = 5
-
-
-def _valid_points(pose: dict) -> tuple[np.ndarray, np.ndarray]:
-    """Return (indices, Nx2 points) for keypoints with confidence > 0."""
-    pts = []
-    idxs = []
-    for i, (x, y, c) in enumerate(pose["keypoints"]):
-        if c > 0:
-            pts.append([x, y])
-            idxs.append(i)
-    if not pts:
-        return np.array([], dtype=np.int64), np.zeros((0, 2), dtype=np.float64)
-    return np.array(idxs, dtype=np.int64), np.asarray(pts, dtype=np.float64)
 
 
 def _kp(pose: dict, idx: int) -> np.ndarray | None:
@@ -388,240 +370,6 @@ def align_pose_to_source(target: dict, source: dict) -> dict:
     out["width"] = source.get("width", out.get("width"))
     out["height"] = source.get("height", out.get("height"))
     return out
-
-
-def blend_poses(source: dict, target: dict, strength: float) -> dict:
-    """Interpolate keypoints source→target. strength 0 = source, 1 = target."""
-    strength = float(np.clip(strength, 0.0, 1.0))
-    out = copy.deepcopy(target)
-    kps = []
-    for i in range(18):
-        sx, sy, sc = source["keypoints"][i]
-        tx, ty, tc = target["keypoints"][i]
-        if sc <= 0 and tc <= 0:
-            kps.append([0.0, 0.0, 0.0])
-        elif sc <= 0:
-            kps.append([tx, ty, tc])
-        elif tc <= 0:
-            kps.append([sx, sy, sc])
-        else:
-            kps.append(
-                [
-                    sx + (tx - sx) * strength,
-                    sy + (ty - sy) * strength,
-                    min(sc, tc),
-                ]
-            )
-    out["keypoints"] = kps
-    out["width"] = source.get("width", out.get("width"))
-    out["height"] = source.get("height", out.get("height"))
-    return out
-
-
-def clamp_pose_displacements(source: dict, target: dict, max_ratio: float = 0.45) -> dict:
-    """Limit per-keypoint travel relative to torso length (stops wild teleports)."""
-    torso = _torso_length(source) or _torso_length(target)
-    if torso is None or torso < 1.0:
-        return target
-    max_d = float(torso) * float(max_ratio)
-    out = copy.deepcopy(target)
-    kps = []
-    for i in range(18):
-        sx, sy, sc = source["keypoints"][i]
-        tx, ty, tc = target["keypoints"][i]
-        if sc <= 0 or tc <= 0:
-            kps.append([tx, ty, tc] if tc > 0 else [sx, sy, sc] if sc > 0 else [0.0, 0.0, 0.0])
-            continue
-        d = np.array([tx - sx, ty - sy], dtype=np.float64)
-        n = float(np.linalg.norm(d))
-        if n > max_d and n > 1e-6:
-            d = d * (max_d / n)
-            tx, ty = sx + d[0], sy + d[1]
-        kps.append([float(tx), float(ty), float(min(sc, tc))])
-    out["keypoints"] = kps
-    return out
-
-
-def _control_points(
-    src_pose: dict,
-    dst_pose: dict,
-    include_limb_mids: bool,
-    w: int,
-    h: int,
-    add_corners: bool,
-) -> tuple[np.ndarray, np.ndarray] | None:
-    src_idxs, _ = _valid_points(src_pose)
-    dst_idxs, _ = _valid_points(dst_pose)
-    common = [i for i in src_idxs.tolist() if i in set(dst_idxs.tolist())]
-    if len(common) < 3:
-        return None
-
-    src_sel = np.array([src_pose["keypoints"][i][:2] for i in common], dtype=np.float64)
-    dst_sel = np.array([dst_pose["keypoints"][i][:2] for i in common], dtype=np.float64)
-
-    if include_limb_mids:
-        extra_src, extra_dst = [], []
-        for a, b in LIMB_PAIRS:
-            sa, sb = src_pose["keypoints"][a], src_pose["keypoints"][b]
-            da, db = dst_pose["keypoints"][a], dst_pose["keypoints"][b]
-            if sa[2] > 0 and sb[2] > 0 and da[2] > 0 and db[2] > 0:
-                extra_src.append([(sa[0] + sb[0]) * 0.5, (sa[1] + sb[1]) * 0.5])
-                extra_dst.append([(da[0] + db[0]) * 0.5, (da[1] + db[1]) * 0.5])
-        if extra_src:
-            src_sel = np.vstack([src_sel, np.asarray(extra_src)])
-            dst_sel = np.vstack([dst_sel, np.asarray(extra_dst)])
-
-    if add_corners:
-        corners = np.array([[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]], dtype=np.float64)
-        src_sel = np.vstack([src_sel, corners])
-        dst_sel = np.vstack([dst_sel, corners])
-
-    # Drop near-duplicate points (Delaunay / TPS choke on them)
-    keep = []
-    used = []
-    for i, p in enumerate(dst_sel):
-        if any(np.linalg.norm(p - q) < 1.5 for q in used):
-            continue
-        used.append(p)
-        keep.append(i)
-    src_sel = src_sel[keep]
-    dst_sel = dst_sel[keep]
-    if len(src_sel) < 3:
-        return None
-    return src_sel, dst_sel
-
-
-def warp_image_piecewise_affine(
-    image_rgb: np.ndarray,
-    src_pose: dict,
-    dst_pose: dict,
-    include_limb_mids: bool = True,
-) -> np.ndarray:
-    """Warp via Delaunay triangles in destination space (inverse map).
-
-    Local affine per triangle — stable on side-view / near-collinear skeletons
-    where global TPS melts the sprite.
-    """
-    if cv2 is None:
-        return image_rgb.copy()
-
-    h, w, _ = image_rgb.shape
-    pts = _control_points(src_pose, dst_pose, include_limb_mids, w, h, add_corners=True)
-    if pts is None:
-        return image_rgb.copy()
-    src_sel, dst_sel = pts
-
-    try:
-        tri = Delaunay(dst_sel)
-    except Exception:
-        return _affine_fallback(image_rgb, src_sel, dst_sel, w, h)
-
-    map_x = np.full((h, w), -1.0, dtype=np.float32)
-    map_y = np.full((h, w), -1.0, dtype=np.float32)
-    # Identity outside the hull so background stays put
-    grid_y, grid_x = np.mgrid[0:h, 0:w].astype(np.float32)
-    map_x[:] = grid_x
-    map_y[:] = grid_y
-
-    for simplex in tri.simplices:
-        dst_tri = dst_sel[simplex].astype(np.float32)
-        src_tri = src_sel[simplex].astype(np.float32)
-        # Skip degenerate triangles
-        area = cv2.contourArea(dst_tri.reshape(-1, 1, 2))
-        if area < 1.0:
-            continue
-        M = cv2.getAffineTransform(dst_tri, src_tri)
-        x0 = int(np.floor(dst_tri[:, 0].min()))
-        y0 = int(np.floor(dst_tri[:, 1].min()))
-        x1 = int(np.ceil(dst_tri[:, 0].max())) + 1
-        y1 = int(np.ceil(dst_tri[:, 1].max())) + 1
-        x0, y0 = max(0, x0), max(0, y0)
-        x1, y1 = min(w, x1), min(h, y1)
-        if x1 <= x0 or y1 <= y0:
-            continue
-
-        mask = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
-        local = dst_tri.copy()
-        local[:, 0] -= x0
-        local[:, 1] -= y0
-        cv2.fillConvexPoly(mask, np.round(local).astype(np.int32), 1)
-
-        yy, xx = np.where(mask > 0)
-        if len(xx) == 0:
-            continue
-        ones = np.ones(len(xx), dtype=np.float32)
-        dst_pts = np.stack([xx.astype(np.float32) + x0, yy.astype(np.float32) + y0, ones], axis=0)
-        src_pts = M @ dst_pts
-        map_x[y0 + yy, x0 + xx] = src_pts[0]
-        map_y[y0 + yy, x0 + xx] = src_pts[1]
-
-    return cv2.remap(
-        image_rgb,
-        map_x,
-        map_y,
-        interpolation=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=(0, 0, 0),
-    )
-
-
-def warp_image_tps(
-    image_rgb: np.ndarray,
-    src_pose: dict,
-    dst_pose: dict,
-    include_limb_mids: bool = True,
-    smoothing: float = 4.0,
-) -> np.ndarray:
-    """Legacy global TPS — prefer piecewise_affine for sprites."""
-    h, w, _ = image_rgb.shape
-    pts = _control_points(src_pose, dst_pose, include_limb_mids, w, h, add_corners=True)
-    if pts is None:
-        return image_rgb.copy()
-    src_sel, dst_sel = pts
-
-    try:
-        rbf_x = RBFInterpolator(dst_sel, src_sel[:, 0], kernel="thin_plate_spline", smoothing=smoothing)
-        rbf_y = RBFInterpolator(dst_sel, src_sel[:, 1], kernel="thin_plate_spline", smoothing=smoothing)
-    except Exception:
-        return _affine_fallback(image_rgb, src_sel, dst_sel, w, h)
-
-    grid_y, grid_x = np.mgrid[0:h, 0:w].astype(np.float64)
-    query = np.stack([grid_x.ravel(), grid_y.ravel()], axis=-1)
-    map_x = rbf_x(query).reshape(h, w).astype(np.float32)
-    map_y = rbf_y(query).reshape(h, w).astype(np.float32)
-
-    if cv2 is not None:
-        return cv2.remap(
-            image_rgb,
-            map_x,
-            map_y,
-            interpolation=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=(0, 0, 0),
-        )
-
-    map_x_i = np.clip(np.rint(map_x), 0, w - 1).astype(np.int32)
-    map_y_i = np.clip(np.rint(map_y), 0, h - 1).astype(np.int32)
-    return image_rgb[map_y_i, map_x_i]
-
-
-def _affine_fallback(image_rgb, src_sel, dst_sel, w, h):
-    if cv2 is not None:
-        M, _ = cv2.estimateAffinePartial2D(src_sel, dst_sel)
-        if M is None:
-            return image_rgb.copy()
-        return cv2.warpAffine(image_rgb, M, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
-    return image_rgb.copy()
-
-
-def _mean_displacement(src_pose: dict, dst_pose: dict) -> float:
-    ds = []
-    for i in range(18):
-        sx, sy, sc = src_pose["keypoints"][i]
-        tx, ty, tc = dst_pose["keypoints"][i]
-        if sc > 0 and tc > 0:
-            ds.append(float(np.hypot(tx - sx, ty - sy)))
-    return float(np.mean(ds)) if ds else 0.0
 
 
 def blend_skeleton_onto_image(

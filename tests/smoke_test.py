@@ -25,7 +25,6 @@ make_pose = pose_io.make_pose
 scale_pose = pose_io.scale_pose
 draw_openpose = utils.draw_openpose
 extract_palette = utils.extract_palette
-warp_image_tps = warp_mod.warp_image_tps
 blend_skeleton_onto_image = warp_mod.blend_skeleton_onto_image
 build_edit_prompt = caption_mod.build_edit_prompt
 
@@ -54,38 +53,6 @@ def test_scale_pose():
 
 
 def test_warp_helpers():
-    img = np.zeros((128, 128, 3), dtype=np.uint8)
-    img[40:90, 50:80] = 200
-    src = make_pose(
-        [
-            [64, 30, 1],
-            [64, 50, 1],
-            [80, 50, 1],
-            [90, 70, 1],
-            [95, 90, 1],
-            [48, 50, 1],
-            [38, 70, 1],
-            [33, 90, 1],
-            [72, 80, 1],
-            [74, 100, 1],
-            [74, 120, 1],
-            [56, 80, 1],
-            [54, 100, 1],
-            [54, 120, 1],
-            [70, 28, 1],
-            [58, 28, 1],
-            [75, 32, 1],
-            [53, 32, 1],
-        ],
-        width=128,
-        height=128,
-    )
-    dst = make_pose(
-        [[p[0] + 5, p[1] - 3, p[2]] for p in src["keypoints"]], width=128, height=128
-    )
-    out = warp_image_tps(img, src, dst)
-    assert out.shape == img.shape
-
     sk = np.zeros((64, 64, 3), dtype=np.uint8)
     sk[20:40, 30:34] = (0, 255, 0)
     blended = blend_skeleton_onto_image(
@@ -97,7 +64,7 @@ def test_warp_helpers():
     )
     assert blended.shape == (64, 64, 3)
     assert blended[30, 32].sum() > 40 * 3
-    print("OK warp helpers (tps + blend)")
+    print("OK warp helpers (blend)")
 
 
 def test_source_pose_no_fake_tpose():

@@ -516,16 +516,6 @@
           "shape": 7
         },
         {
-          "name": "pose_file",
-          "type": "STRING",
-          "link": null,
-          "localized_name": "pose_file",
-          "widget": {
-            "name": "pose_file"
-          },
-          "shape": 7
-        },
-        {
           "name": "width",
           "type": "INT",
           "link": null,
@@ -648,7 +638,6 @@
         "",
         "",
         "",
-        "",
         0,
         0
       ],
@@ -661,7 +650,6 @@
         "caption": "",
         "extra": "",
         "pose_list": "",
-        "pose_file": "",
         "width": 0,
         "height": 0
       }

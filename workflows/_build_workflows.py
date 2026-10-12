@@ -322,9 +322,6 @@ def write_flux_klein() -> Path:
                 _sock(
                     "pose_list", "STRING", widget="pose_list", shape=7, localized="pose_list"
                 ),
-                _sock(
-                    "pose_file", "STRING", widget="pose_file", shape=7, localized="pose_file"
-                ),
                 _sock("width", "INT", widget="width", shape=7, localized="width"),
                 _sock("height", "INT", widget="height", shape=7, localized="height"),
             ],
@@ -380,7 +377,6 @@ def write_flux_klein() -> Path:
                 "",
                 "",
                 "",
-                "",
                 0,
                 0,
             ],
@@ -393,7 +389,6 @@ def write_flux_klein() -> Path:
                 "caption": "",
                 "extra": "",
                 "pose_list": "",
-                "pose_file": "",
                 "width": 0,
                 "height": 0,
             },

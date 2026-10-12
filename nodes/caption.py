@@ -268,7 +268,6 @@ def build_edit_prompt(
     caption: str,
     *,
     palette_hex: str = "",
-    prop_hint: str = "",
     extra: str = "",
     view_hint: str = "",
     view_code: str | None = None,
@@ -370,9 +369,6 @@ def build_edit_prompt(
                 " Do not keep a front T-pose facing the camera if the guide shows a different angle."
             )
         parts.append(lock)
-    hint = (prop_hint or "").strip()
-    if hint:
-        parts.append(hint.rstrip(".") + ".")
     extra_s = (extra or "").strip()
     if extra_s:
         parts.append(extra_s.rstrip(".") + ".")

@@ -165,8 +165,6 @@ class PoseTransferPrep:
                 "extra": ("STRING", {"default": ""}),
                 "source_pose": ("POSE",),
                 "pose_list": ("STRING", {"default": "", "multiline": True}),
-                # Slot placeholder (ignored): keeps widget order stable for old graphs
-                "pose_file": ("STRING", {"default": ""}),
                 "width": ("INT", {"default": 0, "min": 0, "max": 4096}),
                 "height": ("INT", {"default": 0, "min": 0, "max": 4096}),
             },
@@ -216,11 +214,9 @@ class PoseTransferPrep:
         pose_keypoint=None,
         dwpose_image=None,
         pose_list="",
-        pose_file="",
         width=0,
         height=0,
     ):
-        _ = pose_file
         return (
             f"{poses_dir_fingerprint(pose_list)}|{animation}|{orientation}|{frame}|"
             f"{align_to_source}|{auto_caption}|{caption}|{extra}"
@@ -240,11 +236,9 @@ class PoseTransferPrep:
         pose_keypoint=None,
         dwpose_image=None,
         pose_list="",
-        pose_file="",
         width=0,
         height=0,
     ):
-        _ = pose_file  # legacy widget slot only — selection is via filters / pose_list
         rgb = tensor_to_np(image)
         ih, iw = rgb.shape[:2]
         w = int(width) if width and width > 0 else iw

@@ -93,11 +93,6 @@ KEYPOINT_COLORS = [
 ]
 
 
-def empty_keypoints(n: int = 18) -> list[list[float]]:
-    """Return n keypoints as [x, y, confidence], all zero."""
-    return [[0.0, 0.0, 0.0] for _ in range(n)]
-
-
 def make_pose(
     keypoints: list[list[float]],
     width: int = 1024,
