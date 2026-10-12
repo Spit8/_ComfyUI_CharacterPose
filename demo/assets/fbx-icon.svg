@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" role="img" aria-label="FBX file">
+  <path d="M6 2h18l10 10v32a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#2b6cb0"/>
+  <path d="M24 2v10h10" fill="#63b3ed"/>
+  <text x="20" y="34" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#fff">FBX</text>
+</svg>

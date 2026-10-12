@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="140" height="28" role="img" aria-label="Mixamo">
+  <rect width="140" height="28" rx="4" fill="#1a1a1a"/>
+  <rect x="0.5" y="0.5" width="139" height="27" rx="3.5" fill="none" stroke="#ff6a00" stroke-width="1"/>
+  <text x="70" y="19" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#ff6a00">Mixamo</text>
+</svg>

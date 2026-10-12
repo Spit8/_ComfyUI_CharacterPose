@@ -1,68 +1,147 @@
-# ComfyUI CharacterPose
+# ComfyUI CharacterPose **v2**
 
-Custom nodes for **identity-preserving 2D character pose transfer**: take a single sprite and generate the same character in new RPG poses while keeping art style and appearance.
+**One sprite in. A full pose library out — same face, same tunic, same art style.**
 
-> **Main path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + library `.pose` guide) — see `workflows/pose_transfer_flux_klein.json`.
+Turn a single 2D character into RPG-ready animation frames with [Flux.2 Klein](https://github.com/comfyanonymous/ComfyUI) and a Mixamo-powered OpenPose library. No re-drawing. No style drift.
 
-## Features
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![ComfyUI](https://img.shields.io/badge/ComfyUI-custom%20nodes-blue.svg)](https://github.com/comfyanonymous/ComfyUI)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-yellow.svg)](https://www.python.org/)
 
-- **`CP_PoseTransferPrep`** — filters on `poses/`, Florence-2 caption + palette COLOR LOCK → guide batch + edit prompts
-- **`CP_KleinPoseBatch`** — sequential Klein sample per pose (progressive previews)
-- **`CP_MixamoPoseExport`** — Mixamo FBX → `.pose` library (needs `pufbx`)
-- **`CP_PoseLibraryLoad`** / **`CP_ApplyPose`** — load a `.pose` and draw the OpenPose guide
-- CLI tools under [`mixamo_tools/`](mixamo_tools/)
+---
+
+## One character. Many poses. Same look.
+
+<p align="center">
+  <img src="demo/Example_Comfy.png" alt="Source character" width="280"/>
+  <br/>
+  <em>Source sprite — the identity lock for every generation below</em>
+</p>
+
+### Head Hit — left profile
+
+| Pose guide | Guide on sprite | Final frames |
+|:---:|:---:|:---:|
+| ![rig only](demo/HeadHit_LEFT_Result_rigOnly.png) | ![rigged](demo/HeadHit_LEFT_Result_rigged.png) | ![result](demo/HeadHit_LEFT_Result.png) |
+
+### Head Hit — right profile
+
+| Pose guide | Guide on sprite | Final frames |
+|:---:|:---:|:---:|
+| ![rig only](demo/HeadHit_RIGHT_Result_rigOnly.png) | ![rigged](demo/HeadHit_RIGHT_Result_rigged.png) | ![result](demo/HeadHit_RIGHT_Result.png) |
+
+### Slow Run — left profile
+
+| Pose guide | Guide on sprite | Final frames |
+|:---:|:---:|:---:|
+| ![rig only](demo/RunSlow_LEFT_Result_rigOnly.png) | ![rigged](demo/RunSlow_LEFT_Result_rigged.png) | ![result](demo/RunSlow_LEFT_Result.png) |
+
+---
+
+## Why CharacterPose?
+
+### Style that sticks
+
+Prep auto-captions the sprite (Florence-2 when available), injects a **COLOR LOCK** palette, and builds per-pose edit prompts. Klein then regenerates each frame from that identity — red tunic, gold trim, beard, line weight — not a random reinterpretation.
+
+### Mixamo & FBX → 2D skeleton library
+
+<p>
+  <a href="https://www.mixamo.com/"><img src="demo/assets/mixamo-badge.svg" alt="Mixamo" height="28"/></a>
+  &nbsp;
+  <img src="demo/assets/fbx-icon.svg" alt="FBX" height="36"/>
+</p>
+
+Import animations from **[Mixamo](https://www.mixamo.com/)** (or any Mixamo-compatible **`.fbx`** rig) and project them into OpenPose COCO-18 **`.pose`** files. One download → a reusable 2D pose library for every character you own.
+
+### Camera packs: 4 / 6 / 8 views
+
+| Mode | Views | Best for |
+|------|--------|----------|
+| **`4_iso`** | SE · SO · NE · NO | Classic isometric / RTS sheets |
+| **`6`** | 4 ISO + TOP + BOT | ISO + front / back |
+| **`8`** | 4 ISO + LEFT · RIGHT · TOP · BOT | Full cardinal + isometric set |
+
+### Animation density: 10 / 30 / 60 frames per view
+
+`frames_per_view` (Comfy node) / `--positions` (CLI) samples **N evenly spaced frames** along each Mixamo clip:
+
+| N | Feel |
+|---|------|
+| **10** | Quick preview / sparse key poses |
+| **30** | Solid sheet / game-ready loops |
+| **60** | Dense playback, smoother motion |
+
+Example: `8` views × `30` frames → **240** `.pose` files from a single FBX.
+
+---
 
 ## Install
 
-1. Clone into your ComfyUI custom nodes folder:
+### 1. Clone into ComfyUI
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/YOUR_USER/ComfyUI_CharacterPose.git
+git clone https://github.com/Spit8/_ComfyUI_CharacterPose.git
 ```
 
-2. Install Python deps (ComfyUI’s venv recommended):
+Folder name can stay as cloned (`_ComfyUI_CharacterPose`).
+
+### 2. Python dependencies
+
+Install into the **same Python that runs ComfyUI**.
+
+#### A — Global / current interpreter
 
 ```bash
-pip install -r ComfyUI_CharacterPose/requirements.txt
+# From the ComfyUI root (or any shell where `python` is Comfy's Python)
+python -m pip install -r custom_nodes/_ComfyUI_CharacterPose/requirements.txt
+
+# Recommended — richer Prep captions (Florence-2 downloads on first run)
+python -m pip install "transformers>=4.41.0"
+
+# Required for Mixamo FBX → .pose
+python -m pip install -r custom_nodes/_ComfyUI_CharacterPose/mixamo_tools/requirements.txt
 ```
 
-3. Restart ComfyUI.
+#### B — ComfyUI virtualenv (recommended)
 
-### Soft dependencies (Manager)
+**Windows (PowerShell)** — adjust the path to your install:
 
-| Pack | Needed for |
-|------|------------|
-| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | Optional DWPose extract / align |
-| ComfyUI core Flux.2 / Klein nodes | Flux Klein workflow |
-| `transformers` + Florence-2 weights | **Recommended** — detailed auto-captions for Prep |
-| `pufbx` | Mixamo FBX import (`mixamo_tools/requirements.txt`) |
+```powershell
+cd C:\path\to\ComfyUI
+.\venv\Scripts\Activate.ps1
+# If you use the portable embed: .\python_embeded\python.exe -m pip ...
 
-### DWPose ONNX
-
-Place DWPose weights where `comfyui_controlnet_aux` expects them (not under `models/`):
-
-```
-custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/
-  yolox_l.onnx
-  dw-ll_ucoco_384.onnx
+python -m pip install -r custom_nodes\_ComfyUI_CharacterPose\requirements.txt
+python -m pip install "transformers>=4.41.0"
+python -m pip install -r custom_nodes\_ComfyUI_CharacterPose\mixamo_tools\requirements.txt
 ```
 
-## Recommended workflow (Flux.2 Klein + Prep)
+**Linux / macOS:**
 
-Open: `workflows/pose_transfer_flux_klein.json`
+```bash
+cd /path/to/ComfyUI
+source venv/bin/activate   # or: .venv/bin/activate
 
-```
-LoadImage (sprite)
-  → CP_MixamoPoseExport (optional) → pose_list
-  → CP_PoseTransferPrep (filters ALL or one value each)
-       → guide [N], image_batch [N], edit_prompts [N]
-  → CP_KleinPoseBatch (sequential: prompt[i] + guide[i] per pose)
-       → preview/save prefix_000, prefix_001, … as each finishes
-  → SaveImage (full batch at the end)
+python -m pip install -r custom_nodes/_ComfyUI_CharacterPose/requirements.txt
+python -m pip install "transformers>=4.41.0"
+python -m pip install -r custom_nodes/_ComfyUI_CharacterPose/mixamo_tools/requirements.txt
 ```
 
-### Models for Flux Klein path
+`requirements.txt` pulls **numpy**, **opencv-python-headless**, **Pillow**, **scikit-learn**.  
+`mixamo_tools/requirements.txt` adds **pufbx** (FBX reader).
+
+### 3. Soft dependencies (ComfyUI Manager)
+
+| Pack / model | Role |
+|--------------|------|
+| [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | DWPose extract / align (optional but useful) |
+| ComfyUI **Flux.2 / Klein** nodes | Main transfer workflow |
+| `transformers` + Florence-2 | Detailed auto-captions |
+| `pufbx` | Mixamo FBX import |
+
+### 4. Models for the Flux Klein path
 
 | File | Folder |
 |------|--------|
@@ -70,64 +149,186 @@ LoadImage (sprite)
 | `qwen_3_4b.safetensors` | `models/text_encoders/` |
 | `flux2-vae.safetensors` | `models/vae/` |
 
+### 5. DWPose ONNX (optional)
+
+If you use DWPreprocessor, place weights where `comfyui_controlnet_aux` expects them:
+
+```
+custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/
+  yolox_l.onnx
+  dw-ll_ucoco_384.onnx
+```
+
+### 6. Restart ComfyUI
+
+Nodes appear under **CharacterPose**.
+
+---
+
+## Use — pose transfer (main path)
+
+Open the example graph:
+
+`workflows/pose_transfer_flux_klein.json`
+
+![Pose transfer workflow](demo/workflow_transfer.png)
+
+**Flow**
+
+1. **LoadImage** — your character sprite.
+2. **DWPreprocessor** (optional) → wire `pose_keypoint` + `dwpose_image` into Prep for a live source stick.
+3. **`CP_PoseTransferPrep`** — filter the `poses/` library (`animation` / `orientation` / `frame`, each `ALL` or one value), auto-caption, align sticks to the sprite, emit guide batch + edit prompts.
+4. **`CP_KleinPoseBatch`** — one Klein sample per pose (progressive previews as frames finish).
+5. **SaveImage** — full batch at the end.
+
 **Tips**
 
 - Distilled Klein: ~4 steps, CFG `1`.
-- Prep **`align_to_source`** (default on) scales the library stick to the sprite, then **contains** it in the canvas so open Mixamo poses do not clip.
-- Prep selects poses via filters (`animation` / `orientation` / `frame`, each `ALL` or one value). Narrow filters for a single pose.
-- Use the free **`extra`** string on Prep for optional prompt hints (e.g. “holding a sword”).
-- Klein has **no OpenPose ControlNet** — pose guidance is soft (reference latent + prompt).
+- Prep **`align_to_source`** (default on) scales library sticks to the sprite and keeps them inside the canvas.
+- Use Prep **`extra`** for free-form prompt hints (e.g. `holding a sword`).
+- Klein has **no OpenPose ControlNet** on this path — pose guidance is soft (reference latent + prompt).
 
-## Pose library (Mixamo → `.pose`)
+---
 
-### In ComfyUI — `CP_MixamoPoseExport`
+## Use — Mixamo utilities
 
-1. Drop Mixamo `.fbx` into `ComfyUI/input/` or `input/mixamo/`.
-2. Install **`pufbx`** in the ComfyUI Python env (`pip install pufbx`).
-3. Run **Mixamo Pose Export** → writes `{anim}_{VIEW}_{ii}.pose` into package `poses/`.
-4. Prep: choose filters (`ALL` = every match), or wire export `pose_list`.
+Open:
 
-### CLI (optional)
+`workflows/workflow_mixamo.json`
 
-```powershell
-cd mixamo_tools
-.\venv\Scripts\python.exe -m export_views --positions 4 --view 8 --out-dir ..\poses
+![Mixamo utilities workflow](demo/workflow_utilitaires.png)
+
+**Flow**
+
+1. Drop Mixamo `.fbx` files into `ComfyUI/input/` or `ComfyUI/input/mixamo/`.
+2. **`CP_MixamoPoseExport`** — pick the FBX, set `orientations` (`4_iso` / `6` / `8`) and `frames_per_view` (e.g. 10 / 30 / 60).
+3. Export writes `{anim}_{VIEW}_{ii}.pose` into the package `poses/` folder and returns a `pose_list`.
+4. **`CP_PoseLibraryLoad`** + **`CP_ApplyPose`** — preview any `.pose` as an OpenPose guide image.
+
+---
+
+## Build the `.pose` library (two ways)
+
+Same exporter under the hood — pick Comfy or CLI.
+
+### Way 1 — ComfyUI node (`CP_MixamoPoseExport`)
+
+1. Install **pufbx** (see [Install](#2-python-dependencies)).
+2. Put Mixamo FBX under `ComfyUI/input/` (or `input/mixamo/`).
+3. Add **Mixamo Pose Export**, choose:
+   - **`orientations`**: `4_iso` · `6` · `8` (or `4_cardinal`)
+   - **`frames_per_view`**: e.g. `10` / `30` / `60`
+   - **`out_dir`**: `poses` (default — package library)
+   - **`write_png`**: optional debug stick PNGs
+4. Queue the prompt → `.pose` files land in `poses/`; wire `pose_list` into Prep if you want.
+
+### Way 2 — Python CLI (`mixamo_tools`)
+
+#### Global Python
+
+```bash
+cd ComfyUI/custom_nodes/_ComfyUI_CharacterPose
+python -m pip install -r mixamo_tools/requirements.txt
+
+# Export every FBX in mixamo/ → poses/ (8 views × 30 samples)
+python -m mixamo_tools.export_views --positions 30 --view 8 --out-dir poses
 ```
 
-### `source_pose` preview (Prep)
+#### Dedicated `.venv` (recommended for Windows)
 
-Wire **DWPreprocessor** → Prep (`pose_keypoint` + `dwpose_image`). Without DWPose, Prep shows the sprite alone — no fake T-pose.
+**Windows (PowerShell)**
+
+```powershell
+cd ComfyUI\custom_nodes\_ComfyUI_CharacterPose\mixamo_tools
+.\setup_env.ps1
+# Creates .\venv and installs numpy, Pillow, pufbx
+
+.\venv\Scripts\python.exe -m export_views --positions 30 --view 8 --out-dir ..\poses
+```
+
+**Linux / macOS**
+
+```bash
+cd ComfyUI/custom_nodes/_ComfyUI_CharacterPose/mixamo_tools
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+python -m export_views --positions 30 --view 8 --out-dir ../poses
+```
+
+#### Useful commands
+
+```bash
+# All FBX in the default mixamo/ folder, 4 isometric views, 10 samples
+python -m mixamo_tools.export_views --positions 10 --view 4_iso --out-dir poses
+
+# One file only
+python -m mixamo_tools.export_views --fbx mixamo/"Slow Run.fbx" --positions 60 --view 8 --out-dir poses
+
+# .pose only (no debug PNG)
+python -m mixamo_tools.export_views --positions 30 --view 8 --no-png --out-dir poses
+```
+
+#### CLI flags
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--fbx` | `mixamo/` | One `.fbx` **or** a directory of FBX |
+| `--positions N` | `4` | Evenly spaced samples over the clip (`frames_per_view` in the node) |
+| `--view` | `ALL` | `SE`…`BOT`, or `4_iso` / `4_cardinal` / `6` / `8` / `ALL` |
+| `--frame` | — | Single frame index (overrides `--positions`) |
+| `--out-dir` | `mixamo_tools/out` | Use `poses` for the Comfy library |
+| `--size` | `1024` | Square canvas |
+| `--no-png` | off | Skip debug PNG |
+| `--no-pose` | off | Skip `.pose` JSON |
+
+More detail: [`mixamo_tools/README.md`](mixamo_tools/README.md).
+
+---
 
 ## Nodes
 
 | Node | Role |
 |------|------|
-| `CP_MixamoPoseExport` | Mixamo FBX → `.pose` library + `pose_list` |
+| `CP_MixamoPoseExport` | Mixamo / FBX → `.pose` library + `pose_list` |
 | `CP_PoseTransferPrep` | Filters + caption + align → guide batch + prompts |
 | `CP_KleinPoseBatch` | Sequential Klein sample per Prep item |
-| `CP_PoseLibraryLoad` | Load a `.pose` file |
+| `CP_PoseLibraryLoad` | Load one `.pose` file |
 | `CP_ApplyPose` | Draw OpenPose skeleton image |
 
-## Workflows
+---
 
-| File | Notes |
-|------|--------|
-| `pose_transfer_flux_klein.json` | Main path (Prep → Klein batch) |
-| `workflow_mixamo.json` | Mixamo FBX → `.pose` library + preview |
+## Example workflows
 
-Regenerate both: `python workflows/_build_workflows.py`
+| File | What it shows |
+|------|----------------|
+| [`workflows/pose_transfer_flux_klein.json`](workflows/pose_transfer_flux_klein.json) | Prep → Klein batch (main path) |
+| [`workflows/workflow_mixamo.json`](workflows/workflow_mixamo.json) | FBX export + library preview |
+
+Regenerate both from source:
+
+```bash
+python workflows/_build_workflows.py
+```
+
+---
 
 ## Limitations
 
-- **Same-view bias:** a side/¾ sprite does not become a true front/back view for free.
-- Florence-2 is **recommended**; without `transformers`, Prep still injects a K-means **COLOR LOCK** palette.
+- **Same-view bias:** a side / ¾ sprite does not become a true front or back for free — pick matching orientations when you can.
+- Without `transformers`, Prep still runs with a K-means **COLOR LOCK** palette (Florence-2 is recommended).
 - Klein pose lock is **soft** (no OpenPose ControlNet on this path).
+
+---
 
 ## Dev / tests
 
 ```bash
 python tests/smoke_test.py
 ```
+
+---
 
 ## License
 
@@ -138,3 +339,4 @@ MIT — see [LICENSE](LICENSE).
 - Pose detection via [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) / DWPose
 - Generative edit via Black Forest Labs **FLUX.2 Klein** in ComfyUI
 - Captioning via Microsoft **Florence-2** (optional)
+- Animation source: [Mixamo](https://www.mixamo.com/) (Adobe) — Mixamo is a trademark of Adobe Inc.
