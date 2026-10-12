@@ -1,7 +1,7 @@
-"""Build pose_transfer_flux_klein.json (ComfyUI frontend format).
+"""Build ComfyUI frontend workflows for CharacterPose.
 
-Graph matches the checked-in UI workflow: Prep filters, DWPose → Prep
-slots 1/2, Klein batch, progressive previews, Note 28.
+- pose_transfer_flux_klein.json — Prep + Klein batch
+- workflow_mixamo.json — Mixamo export + pose library preview
 
     python workflows/_build_workflows.py
 """
@@ -13,6 +13,7 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
 TARGET = OUT / "pose_transfer_flux_klein.json"
+TARGET_MIXAMO = OUT / "workflow_mixamo.json"
 
 MODELS = [
     {
@@ -630,6 +631,169 @@ def write_flux_klein() -> Path:
     return TARGET
 
 
+def write_mixamo() -> Path:
+    """Mixamo FBX export + PoseLibraryLoad / ApplyPose preview."""
+    # 2 PoseLibraryLoad  3 MixamoExport  6 ApplyPose
+    # 7 Preview (library stick)  8 Preview (export contact sheet)
+
+    links = [
+        link(2, 2, 0, 6, 0, "POSE"),
+        link(3, 6, 0, 7, 0, "IMAGE"),
+        link(4, 3, 2, 8, 0, "IMAGE"),  # Mixamo preview → Preview
+    ]
+
+    def o(nid):
+        return _outs(links, nid)
+
+    def i(nid, slot):
+        return _inp(links, nid, slot)
+
+    nodes = [
+        {
+            "id": 2,
+            "type": "CP_PoseLibraryLoad",
+            "pos": [356.40303389938384, 349.50620953911255],
+            "size": [270, 106],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [
+                _sock("pose_file", "COMBO", widget="pose_file", localized="pose_file"),
+                _sock("width", "INT", widget="width", shape=7, localized="width"),
+                _sock("height", "INT", widget="height", shape=7, localized="height"),
+            ],
+            "outputs": [
+                _out("pose", "POSE", o(2).get(0), localized="pose"),
+            ],
+            "properties": {"Node name for S&R": "CP_PoseLibraryLoad"},
+            "widgets_values": ["head_hit_NO_03.pose", 1024, 1024],
+            "widgets_values_named": {
+                "pose_file": "head_hit_NO_03.pose",
+                "width": 1024,
+                "height": 1024,
+            },
+        },
+        {
+            "id": 3,
+            "type": "CP_MixamoPoseExport",
+            "pos": [354.0735430046062, 522.6579787074959],
+            "size": [270, 218],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+                _sock("fbx", "COMBO", widget="fbx", localized="fbx"),
+                _sock(
+                    "orientations", "COMBO", widget="orientations", localized="orientations"
+                ),
+                _sock(
+                    "frames_per_view",
+                    "INT",
+                    widget="frames_per_view",
+                    localized="frames_per_view",
+                ),
+                _sock("out_dir", "STRING", widget="out_dir", shape=7, localized="out_dir"),
+                _sock(
+                    "write_png", "BOOLEAN", widget="write_png", shape=7, localized="write_png"
+                ),
+                _sock("size", "INT", widget="size", shape=7, localized="size"),
+            ],
+            "outputs": [
+                _out("pose_list", "STRING", None, localized="pose_list"),
+                _out("count", "INT", None, localized="count"),
+                _out("preview", "IMAGE", o(3).get(2), localized="preview"),
+            ],
+            "properties": {"Node name for S&R": "CP_MixamoPoseExport"},
+            # Portable name — resolved via package mixamo/ (see _resolve_fbx)
+            "widgets_values": ["Head Hit.fbx", "8", 9, "poses", False, 1024],
+            "widgets_values_named": {
+                "fbx": "Head Hit.fbx",
+                "orientations": "8",
+                "frames_per_view": 9,
+                "out_dir": "poses",
+                "write_png": False,
+                "size": 1024,
+            },
+        },
+        {
+            "id": 6,
+            "type": "CP_ApplyPose",
+            "pos": [811.6584509957235, 342.90130796699907],
+            "size": [270, 126],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "inputs": [
+                _sock("pose", "POSE", i(6, 0), localized="pose"),
+                _sock("width", "INT", widget="width", shape=7, localized="width"),
+                _sock("height", "INT", widget="height", shape=7, localized="height"),
+                _sock(
+                    "stick_width",
+                    "INT",
+                    widget="stick_width",
+                    shape=7,
+                    localized="stick_width",
+                ),
+            ],
+            "outputs": [
+                _out("skeleton", "IMAGE", o(6).get(0), localized="skeleton"),
+                _out("pose", "POSE", None, localized="pose"),
+            ],
+            "properties": {"Node name for S&R": "CP_ApplyPose"},
+            "widgets_values": [0, 0, 0],
+            "widgets_values_named": {"width": 0, "height": 0, "stick_width": 0},
+        },
+        {
+            "id": 7,
+            "type": "PreviewImage",
+            "pos": [1264.0413887997713, 340.7997687119954],
+            "size": [210, 258],
+            "flags": {},
+            "order": 4,
+            "mode": 0,
+            "inputs": [_sock("images", "IMAGE", i(7, 0), localized="images")],
+            "outputs": [_out("images", "IMAGE", None, localized="images")],
+            "properties": {"Node name for S&R": "PreviewImage"},
+        },
+        {
+            "id": 8,
+            "type": "PreviewImage",
+            "pos": [752.8391105415135, 560.649312671556],
+            "size": [410.8676485847028, 487.6973322115944],
+            "flags": {},
+            "order": 3,
+            "mode": 0,
+            "inputs": [_sock("images", "IMAGE", i(8, 0), localized="images")],
+            "outputs": [_out("images", "IMAGE", None, localized="images")],
+            "properties": {"Node name for S&R": "PreviewImage"},
+        },
+    ]
+
+    data = {
+        "id": "b030ae23-f478-425d-8552-70b5976cf048",
+        "revision": 0,
+        "last_node_id": 9,
+        "last_link_id": 5,
+        "nodes": nodes,
+        "links": links,
+        "groups": [],
+        "config": {},
+        "extra": {
+            "ds": {
+                "scale": 0.9076742523543142,
+                "offset": [-117.95075553589477, -231.00483260392738],
+            }
+        },
+        "version": 0.4,
+    }
+
+    TARGET_MIXAMO.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(f"wrote {TARGET_MIXAMO}")
+    return TARGET_MIXAMO
+
+
 def validate(path: Path) -> None:
     """Sanity-check every link id referenced by nodes exists in links[]."""
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -674,3 +838,5 @@ def validate(path: Path) -> None:
 if __name__ == "__main__":
     write_flux_klein()
     validate(TARGET)
+    write_mixamo()
+    validate(TARGET_MIXAMO)

@@ -112,7 +112,10 @@ Wire **DWPreprocessor** → Prep (`pose_keypoint` + `dwpose_image`). Without DWP
 
 | File | Notes |
 |------|--------|
-| `pose_transfer_flux_klein.json` | Main path — regenerate via `python workflows/_build_workflows.py` |
+| `pose_transfer_flux_klein.json` | Main path (Prep → Klein batch) |
+| `workflow_mixamo.json` | Mixamo FBX → `.pose` library + preview |
+
+Regenerate both: `python workflows/_build_workflows.py`
 
 ## Limitations
 
