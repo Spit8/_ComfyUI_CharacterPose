@@ -266,6 +266,12 @@ def test_edit_prompt_and_caption_fallback():
     assert "NEVER draw bones" in prompt or "never draw bones" in prompt.lower()
     assert "POSE LOCK" in prompt
     assert "single silhouette" in prompt.lower() or "one single silhouette" in prompt.lower()
+    assert "QUALITY LOCK" in prompt
+    assert "extra limbs" in low
+    assert "duplicate" in low or "extra arms" in low
+    assert "malformed" in low or "mutated hands" in low
+    assert "logo" in low
+    assert "ANTI_ARTIFACTS" in caption_mod2.__dict__ or hasattr(caption_mod2, "ANTI_ARTIFACTS")
 
     crawl = build(
         "red bearded knight in tunic with gold trim",
@@ -482,6 +488,65 @@ def test_node_mappings_import():
     print(f"OK node mappings ({len(keys)} nodes)")
 
 
+def test_live_rig_and_preview_batch_wiring():
+    """Live sticks on preview_pose; Klein has images + images_with_guides."""
+    composer_src = (ROOT / "nodes" / "composer.py").read_text(encoding="utf-8")
+    klein_src = (ROOT / "nodes" / "klein_batch.py").read_text(encoding="utf-8")
+    assert "first_preview" not in composer_src
+    assert "preview_pose = full guide batch" in composer_src
+    assert "_push_guide_preview" in klein_src
+    assert "_find_guide_preview_nodes" in klein_src
+    assert "_PREVIEW_POSE_SLOT = 4" in klein_src
+    assert "_push_source_pose_preview" not in klein_src
+    assert "images_with_guides" in klein_src
+    assert "_overlay_guide_on_image" in klein_src
+
+    klein = importlib.import_module(f"{PKG}.nodes.klein_batch")
+    find = klein._find_guide_preview_nodes
+    prompt = {
+        "5": {"class_type": "CP_PoseTransferPrep", "inputs": {}},
+        "6": {"class_type": "PreviewImage", "inputs": {"images": ["5", 3]}},
+        "8": {"class_type": "PreviewImage", "inputs": {"images": ["7", 0]}},
+        "25": {"class_type": "PreviewImage", "inputs": {"images": ["5", 4]}},
+    }
+    assert find(prompt) == ["25"]
+    assert find({}) == []
+    assert find(None) == []
+
+    assert "images_with_guides" in klein.KleinPoseBatch.RETURN_NAMES
+    assert klein.KleinPoseBatch.RETURN_NAMES == ("images", "images_with_guides", "count")
+    req = klein.KleinPoseBatch.INPUT_TYPES()["required"]
+    assert "pose_weight" in req
+    assert req["pose_weight"][1].get("default") == 2
+    assert "for _ in range(pw)" in klein_src or "range(pw)" in klein_src
+
+    utils_mod = importlib.import_module(f"{PKG}.utils")
+    guides = [
+        np.zeros((16, 16, 3), dtype=np.uint8),
+        np.full((16, 16, 3), 40, dtype=np.uint8),
+        np.full((16, 16, 3), 80, dtype=np.uint8),
+    ]
+    t = utils_mod.batch_np_to_tensor(guides)
+    assert int(t.shape[0]) == 3
+
+    # Overlay helper: sticks on image
+    rgb = np.full((32, 32, 3), 180, dtype=np.uint8)
+    skel = np.zeros((32, 32, 3), dtype=np.uint8)
+    skel[8:24, 15:18] = (0, 255, 0)
+    img_t = utils_mod.np_to_tensor(rgb)
+    sk_t = utils_mod.np_to_tensor(skel)
+    over = klein._overlay_guide_on_image(img_t, sk_t)
+    assert over.shape[0] == 1
+
+    wf = (ROOT / "workflows" / "pose_transfer_flux_klein.json").read_text(encoding="utf-8")
+    assert "squelettes seuls" in wf
+    assert "base + squelette detecte" in wf
+    assert "images_with_guides" in wf
+    assert "QC pose" in wf
+    assert "pose_weight" in wf
+    print("OK live sticks + images_with_guides wiring")
+
+
 def test_parse_edit_prompts():
     klein = importlib.import_module(f"{PKG}.nodes.klein_batch")
     parse = klein.parse_edit_prompts
@@ -517,5 +582,6 @@ if __name__ == "__main__":
     test_fit_pose_and_filtered_palette()
     test_horizontal_fit_crawl()
     test_node_mappings_import()
+    test_live_rig_and_preview_batch_wiring()
     test_parse_edit_prompts()
     print("All smoke tests passed.")

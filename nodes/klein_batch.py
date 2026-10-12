@@ -175,6 +175,98 @@ def _prompt_id(prompt) -> str | None:
     return None
 
 
+# Prep RETURN_NAMES: guide=0 … source_pose=3, preview_pose=4, …
+_PREVIEW_POSE_SLOT = 4
+
+
+def _find_guide_preview_nodes(prompt: Any) -> list[str]:
+    """PreviewImage nodes whose images input is wired to Prep.preview_pose (slot 4)."""
+    if not isinstance(prompt, dict):
+        return []
+    prep_ids = {
+        str(nid)
+        for nid, node in prompt.items()
+        if isinstance(node, dict) and node.get("class_type") == "CP_PoseTransferPrep"
+    }
+    if not prep_ids:
+        return []
+    targets: list[str] = []
+    for nid, node in prompt.items():
+        if not isinstance(node, dict):
+            continue
+        if node.get("class_type") != "PreviewImage":
+            continue
+        images = (node.get("inputs") or {}).get("images")
+        if not isinstance(images, (list, tuple)) or len(images) < 2:
+            continue
+        src, slot = str(images[0]), images[1]
+        try:
+            slot_i = int(slot)
+        except (TypeError, ValueError):
+            continue
+        if src in prep_ids and slot_i == _PREVIEW_POSE_SLOT:
+            targets.append(str(nid))
+    return targets
+
+
+def _overlay_guide_on_image(image: torch.Tensor, guide: torch.Tensor) -> torch.Tensor:
+    """Composite OpenPose guide sticks onto an IMAGE tensor (result or sprite)."""
+    from ..utils import np_to_tensor, tensor_to_np
+    from .composer import _overlay_dwpose_image
+
+    base = tensor_to_np(image)
+    skel = tensor_to_np(guide)
+    # Match spatial size if guide differs from result megapixel scale
+    if base.shape[:2] != skel.shape[:2]:
+        import cv2
+
+        skel = cv2.resize(
+            skel, (base.shape[1], base.shape[0]), interpolation=cv2.INTER_NEAREST
+        )
+    out = _overlay_dwpose_image(base, skel)
+    return np_to_tensor(out)
+
+
+def _push_guide_preview(
+    guide: torch.Tensor,
+    *,
+    filename_prefix: str,
+    prompt: Any,
+    prompt_id: str | None,
+) -> None:
+    """Update Prep preview_pose PreviewImage(s) with stick-only guide — not Klein UI."""
+    targets = _find_guide_preview_nodes(prompt)
+    if not targets:
+        return
+
+    saved_meta: list[Any] = []
+    try:
+        from nodes import PreviewImage
+
+        saved = PreviewImage().save_images(guide, filename_prefix=filename_prefix)
+        saved_meta = list(saved.get("ui", {}).get("images", []))
+    except Exception as e:
+        logger.warning("guide PreviewImage save failed: %s", e)
+        return
+    if not saved_meta:
+        return
+
+    try:
+        from server import PromptServer
+
+        for nid in targets:
+            payload = {
+                "node": str(nid),
+                "display_node": str(nid),
+                "output": {"images": list(saved_meta)},
+            }
+            if prompt_id:
+                payload["prompt_id"] = prompt_id
+            PromptServer.instance.send_sync("executed", payload)
+    except Exception as e:
+        logger.warning("guide executed push failed: %s", e)
+
+
 def _push_live_preview(
     images: torch.Tensor,
     *,
@@ -282,7 +374,7 @@ class KleinPoseBatch:
                     },
                 ),
                 # Disable control_after_generate so widgets_values stay aligned
-                # (seed, steps, cfg, sampler, megapixels, prefix) — no extra combo.
+                # (seed, steps, cfg, sampler, megapixels, pose_weight, prefix).
                 "seed": (
                     "INT",
                     {
@@ -302,6 +394,8 @@ class KleinPoseBatch:
                     "FLOAT",
                     {"default": 1.0, "min": 0.1, "max": 4.0, "step": 0.05},
                 ),
+                # How many times to apply ReferenceLatent(guide): 1 soft … 4 strong pose
+                "pose_weight": ("INT", {"default": 2, "min": 1, "max": 4}),
                 "filename_prefix": (
                     "STRING",
                     {"default": "pose_transfer_flux_klein"},
@@ -313,8 +407,8 @@ class KleinPoseBatch:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "INT")
-    RETURN_NAMES = ("images", "count")
+    RETURN_TYPES = ("IMAGE", "IMAGE", "INT")
+    RETURN_NAMES = ("images", "images_with_guides", "count")
     FUNCTION = "run"
     CATEGORY = "characterpose"
     OUTPUT_NODE = True
@@ -332,7 +426,8 @@ class KleinPoseBatch:
         cfg: float,
         sampler_name: str,
         megapixels: float,
-        filename_prefix: str,
+        pose_weight: int = 2,
+        filename_prefix: str = "pose_transfer_flux_klein",
         unique_id=None,
         prompt=None,
     ):
@@ -347,6 +442,7 @@ class KleinPoseBatch:
             raise ValueError("Empty image_batch.")
         global _NESTED_UNIQUE_ID
 
+        pw = int(max(1, min(4, int(pose_weight))))
         prompts = parse_edit_prompts(edit_prompts, n)
         prompt_id = _prompt_id(prompt)
         _NESTED_UNIQUE_ID = str(unique_id) if unique_id is not None else "cp_klein_batch"
@@ -359,6 +455,7 @@ class KleinPoseBatch:
             pbar = None
 
         outs: list[torch.Tensor] = []
+        outs_guided: list[torch.Tensor] = []
         ui_images: list[Any] = []
         try:
             sampler = _call("KSamplerSelect", sampler_name=sampler_name)[0]
@@ -367,6 +464,14 @@ class KleinPoseBatch:
                 sprite_i = image_batch[i : i + 1]
                 guide_i = guide[i : i + 1]
                 prompt_text = prompts[i]
+
+                # Stick-only live on Prep preview_pose Preview (source_pose stays base+detected)
+                _push_guide_preview(
+                    guide_i,
+                    filename_prefix=f"{filename_prefix}_guide_{i:03d}",
+                    prompt=prompt,
+                    prompt_id=prompt_id,
+                )
 
                 scaled_sprite = _scale_ref(sprite_i, megapixels)
                 scaled_guide = _scale_ref(guide_i, megapixels)
@@ -377,10 +482,12 @@ class KleinPoseBatch:
 
                 lat1 = _call("VAEEncode", pixels=scaled_sprite, vae=vae)[0]
                 lat2 = _call("VAEEncode", pixels=scaled_guide, vae=vae)[0]
-                # Sprite once (identity/colors), guide twice (overweight pose vs standing ghost)
+                # Sprite once (identity/colors); guide pose_weight times (1 soft … 4 strong)
                 positive = _call("ReferenceLatent", conditioning=positive, latent=lat1)[0]
-                positive = _call("ReferenceLatent", conditioning=positive, latent=lat2)[0]
-                positive = _call("ReferenceLatent", conditioning=positive, latent=lat2)[0]
+                for _ in range(pw):
+                    positive = _call(
+                        "ReferenceLatent", conditioning=positive, latent=lat2
+                    )[0]
 
                 empty = _call(
                     "EmptyFlux2LatentImage",
@@ -424,11 +531,22 @@ class KleinPoseBatch:
                     prompt_id=prompt_id,
                 )
                 outs.append(image)
+                try:
+                    # Overlay sticks on result at result resolution
+                    guided = _overlay_guide_on_image(image, scaled_guide)
+                except Exception as e:
+                    logger.warning("images_with_guides overlay failed (pose %s): %s", i, e)
+                    guided = image
+                outs_guided.append(guided)
         finally:
             _NESTED_UNIQUE_ID = None
 
         stacked = torch.cat(outs, dim=0)
-        return {"ui": {"images": ui_images}, "result": (stacked, n)}
+        stacked_guided = torch.cat(outs_guided, dim=0)
+        return {
+            "ui": {"images": ui_images},
+            "result": (stacked, stacked_guided, n),
+        }
 
 
 NODE_CLASS_MAPPINGS = {

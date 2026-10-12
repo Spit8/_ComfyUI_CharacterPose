@@ -528,7 +528,6 @@ class PoseTransferPrep:
         prompts: list[str] = []
         names: list[str] = []
         first_pose = None
-        first_preview = None
 
         for entry in entries:
             fname = entry["filename"]
@@ -561,19 +560,19 @@ class PoseTransferPrep:
             names.append(fname)
             if first_pose is None:
                 first_pose = pose
-                first_preview = preview
 
         n = len(guides)
         guide_t = batch_np_to_tensor(guides)
         # Sprite repeated N times so ref1 batch matches guide / latent batch
         image_batch = batch_np_to_tensor([base] * n)
+        # preview_pose = full guide batch (not pose 0 only); live rig sync is on Klein
 
         return (
             guide_t,
             prompts[0],
             first_pose,
             np_to_tensor(source_pose_img),
-            np_to_tensor(first_preview),
+            guide_t,
             resolved_caption,
             backend,
             json.dumps(prompts, ensure_ascii=False),

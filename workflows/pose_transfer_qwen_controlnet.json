@@ -1,6 +1,6 @@
 {
-  "last_node_id": 18,
-  "last_link_id": 24,
+  "last_node_id": 19,
+  "last_link_id": 27,
   "nodes": [
     {
       "id": 1,
@@ -31,14 +31,14 @@
         "Node name for S&R": "UNETLoader",
         "models": [
           {
-            "name": "qwen_image_edit_2511_fp8_e4m3fn.safetensors",
-            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8_e4m3fn.safetensors",
+            "name": "qwen_image_edit_2511_fp8mixed.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
             "directory": "diffusion_models"
           }
         ]
       },
       "widgets_values": [
-        "qwen_image_edit_2511_fp8_e4m3fn.safetensors",
+        "qwen_image_edit_2511_fp8mixed.safetensors",
         "default"
       ]
     },
@@ -104,6 +104,7 @@
           "name": "VAE",
           "type": "VAE",
           "links": [
+            25,
             16,
             17
           ],
@@ -215,7 +216,7 @@
       ],
       "size": [
         360,
-        340
+        420
       ],
       "flags": {},
       "order": 5,
@@ -237,8 +238,64 @@
           "link": 24
         },
         {
+          "name": "prop2",
+          "type": "COMBO",
+          "widget": {
+            "name": "prop2"
+          },
+          "link": null
+        },
+        {
+          "name": "caption",
+          "type": "STRING",
+          "widget": {
+            "name": "caption"
+          },
+          "link": null
+        },
+        {
+          "name": "extra",
+          "type": "STRING",
+          "widget": {
+            "name": "extra"
+          },
+          "link": null
+        },
+        {
           "name": "source_pose",
           "type": "POSE",
+          "link": null
+        },
+        {
+          "name": "pose_list",
+          "type": "STRING",
+          "widget": {
+            "name": "pose_list"
+          },
+          "link": null
+        },
+        {
+          "name": "pose_file",
+          "type": "STRING",
+          "widget": {
+            "name": "pose_file"
+          },
+          "link": null
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": null
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
           "link": null
         }
       ],
@@ -247,7 +304,7 @@
           "name": "guide",
           "type": "IMAGE",
           "links": [
-            8
+            26
           ],
           "slot_index": 0
         },
@@ -292,23 +349,66 @@
           "type": "STRING",
           "links": null,
           "slot_index": 6
+        },
+        {
+          "name": "edit_prompts",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 7
+        },
+        {
+          "name": "pose_names",
+          "type": "STRING",
+          "links": null,
+          "slot_index": 8
+        },
+        {
+          "name": "image_batch",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 9
+        },
+        {
+          "name": "count",
+          "type": "INT",
+          "links": null,
+          "slot_index": 10
         }
       ],
-      "title": "Prep (caption + pose file)",
+      "title": "Prep (single pose \u2192 guide)",
       "properties": {
         "Node name for S&R": "CP_PoseTransferPrep"
       },
       "widgets_values": [
-        "slow_run_SE_00.pose",
-        "sword",
+        "ALL",
+        "ALL",
+        "01",
+        "none",
         true,
         true,
         "none",
         "",
         "",
+        "",
+        "",
         0,
         0
-      ]
+      ],
+      "widgets_values_named": {
+        "animation": "ALL",
+        "orientation": "ALL",
+        "frame": "01",
+        "prop": "none",
+        "align_to_source": true,
+        "auto_caption": true,
+        "prop2": "none",
+        "caption": "",
+        "extra": "",
+        "pose_list": "",
+        "pose_file": "",
+        "width": 0,
+        "height": 0
+      }
     },
     {
       "id": 18,
@@ -539,6 +639,11 @@
           "name": "image",
           "type": "IMAGE",
           "link": 8
+        },
+        {
+          "name": "vae",
+          "type": "VAE",
+          "link": 25
         }
       ],
       "outputs": [
@@ -601,6 +706,47 @@
         }
       ],
       "title": "Scale sprite",
+      "properties": {
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "lanczos",
+        1.0,
+        64
+      ]
+    },
+    {
+      "id": 19,
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        840,
+        660
+      ],
+      "size": [
+        300,
+        106
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 26
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            8
+          ],
+          "slot_index": 0
+        }
+      ],
+      "title": "Scale guide (match latent)",
       "properties": {
         "Node name for S&R": "ImageScaleToTotalPixels"
       },
@@ -693,7 +839,7 @@
           "name": "LATENT",
           "type": "LATENT",
           "links": [
-            19
+            27
           ],
           "slot_index": 0
         }
@@ -729,7 +875,7 @@
         {
           "name": "samples",
           "type": "LATENT",
-          "link": 19
+          "link": 27
         },
         {
           "name": "vae",
@@ -801,7 +947,7 @@
         "text": ""
       },
       "widgets_values": [
-        "CharacterPose \u2014 Qwen + ControlNet\n\nsource_pose = sprite + squelette detecte\npreview_pose = pose cible seule\nguide \u2192 ControlNetApplyAdvanced\n"
+        "CharacterPose \u2014 Qwen + ControlNet (single pose)\n\nframe=01 (pas ALL) \u2014 multi-pose = Klein batch\nguide scale 1 MP = meme res que sprite latent\nVAE branche sur ControlNetApplyAdvanced\nUNET = qwen_image_edit_2511 (edit)\n"
       ]
     }
   ],
@@ -879,8 +1025,16 @@
       "IMAGE"
     ],
     [
-      8,
+      26,
       6,
+      0,
+      19,
+      0,
+      "IMAGE"
+    ],
+    [
+      8,
+      19,
       0,
       10,
       3,
@@ -925,6 +1079,14 @@
       10,
       1,
       "CONDITIONING"
+    ],
+    [
+      25,
+      3,
+      0,
+      10,
+      4,
+      "VAE"
     ],
     [
       13,
@@ -975,7 +1137,7 @@
       "LATENT"
     ],
     [
-      19,
+      27,
       13,
       0,
       14,
@@ -1036,14 +1198,14 @@
   "extra": {
     "info": {
       "name": "CharacterPose \u2014 Qwen-Image-Edit + ControlNet",
-      "version": "0.5.1",
-      "description": "Fully wired Prep \u2192 ControlNet OpenPose \u2192 KSampler."
+      "version": "0.5.2",
+      "description": "Single-pose Prep \u2192 scaled guide + VAE \u2192 ControlNet \u2192 KSampler."
     }
   },
   "models": [
     {
-      "name": "qwen_image_edit_2511_fp8_e4m3fn.safetensors",
-      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8_e4m3fn.safetensors",
+      "name": "qwen_image_edit_2511_fp8mixed.safetensors",
+      "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
       "directory": "diffusion_models"
     },
     {

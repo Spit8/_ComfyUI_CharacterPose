@@ -105,7 +105,7 @@ Qwen-Image-Edit + ControlNet Union (InstantX) on the OpenPose guide
 
 | File | Folder |
 |------|--------|
-| `qwen_image_edit_2511_fp8_e4m3fn.safetensors` (or 2509) | `models/diffusion_models/` |
+| `qwen_image_edit_2511_fp8mixed.safetensors` (or `2511_bf16` / `2509_fp8_e4m3fn`) | `models/diffusion_models/` |
 | `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `models/text_encoders/` |
 | `qwen_image_vae.safetensors` | `models/vae/` |
 | `Qwen-Image-InstantX-ControlNet-Union.safetensors` | `models/controlnet/` |

@@ -22,6 +22,19 @@ ANTI_BONES = (
     "or OpenPose sticks on the character. Solid clothed opaque skin and clothing only."
 )
 
+# Positive-side anti-artifact block (Klein has no useful negative / CFG≈1)
+ANTI_ARTIFACTS = (
+    "QUALITY LOCK — clean sharp art, no blur, no bad art, no deformed or disfigured anatomy, "
+    "no bad proportions, no mutilated or malformed limbs. "
+    "Exactly two arms and two legs — no extra limbs, no extra arms, no extra legs, "
+    "no missing arms or legs, no duplicate body parts, no fused or ghost limbs. "
+    "Well-drawn hands and feet — no poorly drawn hands or feet, no mutated hands, "
+    "no fused fingers, no extra fingers, no too many fingers. "
+    "Well-drawn face — no poorly drawn face, no cross-eye, no long neck. "
+    "Full character in frame — no out of frame, no body out of frame. "
+    "No text, no logo, no signature, no watermark."
+)
+
 DEFAULT_FALLBACK_CAPTION = (
     "full-body 2D game character sprite, cartoon line art, clean flat colors, plain background"
 )
@@ -365,6 +378,7 @@ def build_edit_prompt(
         parts.append(extra_s.rstrip(".") + ".")
     if include_anti_bones:
         parts.append(ANTI_BONES)
+    parts.append(ANTI_ARTIFACTS)
     parts.append(
         "Single character, clean art, plain white background, no extra limbs, no duplicate heads."
     )

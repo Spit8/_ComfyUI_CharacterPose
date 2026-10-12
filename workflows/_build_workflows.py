@@ -16,7 +16,7 @@ def write_flux_klein():
     """Flux.2 Klein + Prep + sequential CP_KleinPoseBatch."""
     # 1 UNET  2 CLIP  3 VAE  4 LoadImage  5 Prep
     # 6 Preview source  7 CP_KleinPoseBatch  8 Preview results  9 Save
-    # 10 Note  25 Preview pose  26 DWPreprocessor
+    # 10 Note  25 Preview pose  26 DWPreprocessor  27 Preview with guides
 
     links = [
         link(1, 1, 0, 7, 0, "MODEL"),
@@ -30,9 +30,10 @@ def write_flux_klein():
         link(8, 5, 0, 7, 4, "IMAGE"),  # guide
         link(9, 5, 7, 7, 5, "STRING"),  # edit_prompts
         link(10, 5, 3, 6, 0, "IMAGE"),  # source_pose preview
-        link(32, 5, 4, 25, 0, "IMAGE"),  # preview_pose
+        link(32, 5, 4, 25, 0, "IMAGE"),  # preview_pose (sticks)
         link(11, 7, 0, 9, 0, "IMAGE"),  # results -> Save
         link(12, 7, 0, 8, 0, "IMAGE"),  # results -> Preview
+        link(36, 7, 1, 27, 0, "IMAGE"),  # images_with_guides -> Preview
     ]
 
     def outs(nid):
@@ -263,7 +264,7 @@ def write_flux_klein():
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(6, 0)}],
             "outputs": [],
-            "title": "source_pose (sprite + squelette)",
+            "title": "source_pose (base + squelette detecte)",
             "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
@@ -277,7 +278,7 @@ def write_flux_klein():
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(25, 0)}],
             "outputs": [],
-            "title": "preview_pose (pose sortie)",
+            "title": "guides (squelettes seuls, live pose en cours)",
             "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
@@ -285,7 +286,7 @@ def write_flux_klein():
             "id": 7,
             "type": "CP_KleinPoseBatch",
             "pos": [840, 80],
-            "size": [360, 320],
+            "size": [360, 340],
             "flags": {},
             "order": 7,
             "mode": 0,
@@ -313,6 +314,12 @@ def write_flux_klein():
                     "link": None,
                 },
                 {
+                    "name": "pose_weight",
+                    "type": "INT",
+                    "widget": {"name": "pose_weight"},
+                    "link": None,
+                },
+                {
                     "name": "filename_prefix",
                     "type": "STRING",
                     "widget": {"name": "filename_prefix"},
@@ -321,18 +328,25 @@ def write_flux_klein():
             ],
             "outputs": [
                 {"name": "images", "type": "IMAGE", "links": o[7].get(0), "slot_index": 0},
-                {"name": "count", "type": "INT", "links": None, "slot_index": 1},
+                {
+                    "name": "images_with_guides",
+                    "type": "IMAGE",
+                    "links": o[7].get(1),
+                    "slot_index": 1,
+                },
+                {"name": "count", "type": "INT", "links": None, "slot_index": 2},
             ],
-            "title": "Klein batch (sequential, progressive preview)",
+            "title": "Klein batch (resultats progressifs)",
             "properties": {"Node name for S&R": "CP_KleinPoseBatch"},
-            # Order must match widget slots: seed, steps, cfg, sampler_name, megapixels, prefix
-            "widgets_values": [42, 4, 1.0, "euler", 1.0, "pose_transfer_flux_klein"],
+            # seed, steps, cfg, sampler, megapixels, pose_weight, prefix
+            "widgets_values": [42, 4, 1.0, "euler", 1.0, 2, "pose_transfer_flux_klein"],
             "widgets_values_named": {
                 "seed": 42,
                 "steps": 4,
                 "cfg": 1.0,
                 "sampler_name": "euler",
                 "megapixels": 1.0,
+                "pose_weight": 2,
                 "filename_prefix": "pose_transfer_flux_klein",
             },
         },
@@ -346,7 +360,21 @@ def write_flux_klein():
             "mode": 0,
             "inputs": [{"name": "images", "type": "IMAGE", "link": inp(8, 0)}],
             "outputs": [],
-            "title": "Results (batch final)",
+            "title": "Results (images seules)",
+            "properties": {"Node name for S&R": "PreviewImage"},
+            "widgets_values": [],
+        },
+        {
+            "id": 27,
+            "type": "PreviewImage",
+            "pos": [1640, 80],
+            "size": [360, 360],
+            "flags": {},
+            "order": 8,
+            "mode": 0,
+            "inputs": [{"name": "images", "type": "IMAGE", "link": inp(27, 0)}],
+            "outputs": [],
+            "title": "Results + guides (QC pose)",
             "properties": {"Node name for S&R": "PreviewImage"},
             "widgets_values": [],
         },
@@ -367,7 +395,7 @@ def write_flux_klein():
             "id": 10,
             "type": "Note",
             "pos": [40, 760],
-            "size": [340, 280],
+            "size": [340, 340],
             "flags": {},
             "order": 10,
             "mode": 0,
@@ -377,17 +405,20 @@ def write_flux_klein():
             "widgets_values": [
                 "CharacterPose — Flux.2 Klein (Prep)\n\n"
                 "1 Queue = N poses SEQUENTIELLES.\n"
-                "Chaque pose: son edit_prompt + guide.\n"
-                "Preview/save au fur et a mesure\n"
-                "(prefix_000, prefix_001, …).\n"
+                "Prep source_pose = base + squelette detecte (fixe).\n"
+                "Prep preview_pose = sticks seuls ;\n"
+                "  live pose en cours pendant Klein.\n"
+                "Klein images = resultats nets (progressifs).\n"
+                "Klein images_with_guides = QC pose.\n"
+                "pose_weight: 1 soft … 2 defaut … 4 pose forte.\n"
                 "Redemarrer Comfy apres update nodes.\n"
             ],
         },
     ]
 
     data = {
-        "last_node_id": 26,
-        "last_link_id": 35,
+        "last_node_id": 27,
+        "last_link_id": 36,
         "nodes": nodes,
         "links": links,
         "groups": [
@@ -449,37 +480,13 @@ def write_flux_klein():
 
 
 def write_qwen():
-    """Qwen-Image-Edit + ControlNet — fully wired, no duplicate links."""
-    # 1 UNET  2 CLIP  3 VAE  4 ControlNet  5 LoadImage  6 Prep  7 Preview
-    # 8 CLIPTextEncode positive (prompt from prep)
-    # 9 CLIPTextEncode negative
-    # 10 ControlNetApplyAdvanced
-    # 11 ImageScale  12 VAEEncode  13 KSampler  14 VAEDecode  15 Save  16 Note
+    """Qwen-Image-Edit + ControlNet — single pose, guide scaled to match latent."""
+    # 1 UNET  2 CLIP  3 VAE  4 ControlNet  5 LoadImage  6 Prep  7 Preview source
+    # 8 CLIP+  9 CLIP-  10 ControlNetApply  11 Scale sprite  12 VAEEncode
+    # 13 KSampler  14 VAEDecode  15 Save  16 Note  17 Preview pose
+    # 18 DWPreprocessor  19 Scale guide (same MP as sprite)
 
-    links = [
-        link(1, 1, 0, 13, 0, "MODEL"),
-        link(2, 2, 0, 8, 0, "CLIP"),
-        link(3, 2, 0, 9, 0, "CLIP"),
-        link(4, 4, 0, 10, 2, "CONTROL_NET"),
-        link(5, 5, 0, 6, 0, "IMAGE"),
-        link(6, 5, 0, 11, 0, "IMAGE"),
-        link(7, 5, 0, 8, 2, "IMAGE"),  # sprite -> encode (optional image slot if present)
-        link(8, 6, 0, 10, 3, "IMAGE"),  # guide -> controlnet image
-        link(9, 6, 1, 8, 1, "STRING"),  # edit_prompt -> positive text
-        link(10, 6, 3, 7, 0, "IMAGE"),  # preview
-        link(11, 8, 0, 10, 0, "CONDITIONING"),
-        link(12, 9, 0, 10, 1, "CONDITIONING"),
-        link(13, 10, 0, 13, 1, "CONDITIONING"),
-        link(14, 10, 1, 13, 2, "CONDITIONING"),
-        link(15, 11, 0, 12, 0, "IMAGE"),
-        link(16, 3, 0, 12, 1, "VAE"),
-        link(17, 3, 0, 14, 1, "VAE"),
-        link(18, 12, 0, 13, 3, "LATENT"),
-        link(19, 13, 0, 14, 0, "LATENT"),
-        link(20, 14, 0, 15, 0, "IMAGE"),
-    ]
-
-    def outs(nid):
+    def _outs(nid):
         m = {}
         for L in links:
             if L[1] == nid:
@@ -492,14 +499,6 @@ def write_qwen():
                 return L[0]
         return None
 
-    o = {i: outs(i) for i in range(1, 17)}
-
-    # For CLIPTextEncode positive: clip=0, text=1, and optionally we won't use image on CLIPTextEncode
-    # Remove link 7 to CLIPTextEncode image - CLIPTextEncode doesn't have image input!
-    # Fix links: remove the bogus sprite->encode image link
-    links = [L for L in links if L[0] != 7]
-    # renumber? Keep gap is ok for ComfyUI. Better rebuild cleanly.
-
     links = [
         link(1, 1, 0, 13, 0, "MODEL"),
         link(2, 2, 0, 8, 0, "CLIP"),
@@ -507,27 +506,28 @@ def write_qwen():
         link(4, 4, 0, 10, 2, "CONTROL_NET"),
         link(5, 5, 0, 6, 0, "IMAGE"),
         link(6, 5, 0, 11, 0, "IMAGE"),
-        link(22, 5, 0, 18, 0, "IMAGE"),  # sprite -> DWPreprocessor
-        # Prep optional: 7=pose_keypoint, 8=dwpose_image
+        link(22, 5, 0, 18, 0, "IMAGE"),
         link(23, 18, 1, 6, 7, "POSE_KEYPOINT"),
         link(24, 18, 0, 6, 8, "IMAGE"),
-        link(8, 6, 0, 10, 3, "IMAGE"),
+        link(26, 6, 0, 19, 0, "IMAGE"),  # Prep guide -> scale guide
+        link(8, 19, 0, 10, 3, "IMAGE"),  # scaled guide -> ControlNet
         link(9, 6, 1, 8, 1, "STRING"),
-        link(10, 6, 3, 7, 0, "IMAGE"),  # source_pose -> Preview
-        link(21, 6, 4, 17, 0, "IMAGE"),  # preview_pose -> Preview 2
+        link(10, 6, 3, 7, 0, "IMAGE"),
+        link(21, 6, 4, 17, 0, "IMAGE"),
         link(11, 8, 0, 10, 0, "CONDITIONING"),
         link(12, 9, 0, 10, 1, "CONDITIONING"),
+        link(25, 3, 0, 10, 4, "VAE"),  # VAE required by Qwen ControlNet
         link(13, 10, 0, 13, 1, "CONDITIONING"),
         link(14, 10, 1, 13, 2, "CONDITIONING"),
         link(15, 11, 0, 12, 0, "IMAGE"),
         link(16, 3, 0, 12, 1, "VAE"),
         link(17, 3, 0, 14, 1, "VAE"),
         link(18, 12, 0, 13, 3, "LATENT"),
-        link(19, 13, 0, 14, 0, "LATENT"),
+        link(27, 13, 0, 14, 0, "LATENT"),
         link(20, 14, 0, 15, 0, "IMAGE"),
     ]
 
-    o = {i: outs(i) for i in range(1, 19)}
+    o = {i: _outs(i) for i in range(1, 20)}
 
     nodes = [
         {
@@ -546,13 +546,13 @@ def write_qwen():
                 "Node name for S&R": "UNETLoader",
                 "models": [
                     {
-                        "name": "qwen_image_edit_2511_fp8_e4m3fn.safetensors",
-                        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8_e4m3fn.safetensors",
+                        "name": "qwen_image_edit_2511_fp8mixed.safetensors",
+                        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
                         "directory": "diffusion_models",
                     }
                 ],
             },
-            "widgets_values": ["qwen_image_edit_2511_fp8_e4m3fn.safetensors", "default"],
+            "widgets_values": ["qwen_image_edit_2511_fp8mixed.safetensors", "default"],
         },
         {
             "id": 2,
@@ -653,7 +653,7 @@ def write_qwen():
             "id": 6,
             "type": "CP_PoseTransferPrep",
             "pos": [420, 520],
-            "size": [360, 340],
+            "size": [360, 420],
             "flags": {},
             "order": 5,
             "mode": 0,
@@ -661,7 +661,14 @@ def write_qwen():
                 {"name": "image", "type": "IMAGE", "link": inp(6, 0)},
                 {"name": "pose_keypoint", "type": "POSE_KEYPOINT", "link": inp(6, 7)},
                 {"name": "dwpose_image", "type": "IMAGE", "link": inp(6, 8)},
+                {"name": "prop2", "type": "COMBO", "widget": {"name": "prop2"}, "link": None},
+                {"name": "caption", "type": "STRING", "widget": {"name": "caption"}, "link": None},
+                {"name": "extra", "type": "STRING", "widget": {"name": "extra"}, "link": None},
                 {"name": "source_pose", "type": "POSE", "link": None},
+                {"name": "pose_list", "type": "STRING", "widget": {"name": "pose_list"}, "link": None},
+                {"name": "pose_file", "type": "STRING", "widget": {"name": "pose_file"}, "link": None},
+                {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": None},
+                {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": None},
             ],
             "outputs": [
                 {"name": "guide", "type": "IMAGE", "links": o[6].get(0), "slot_index": 0},
@@ -671,20 +678,43 @@ def write_qwen():
                 {"name": "preview_pose", "type": "IMAGE", "links": o[6].get(4), "slot_index": 4},
                 {"name": "caption", "type": "STRING", "links": None, "slot_index": 5},
                 {"name": "caption_backend", "type": "STRING", "links": None, "slot_index": 6},
+                {"name": "edit_prompts", "type": "STRING", "links": None, "slot_index": 7},
+                {"name": "pose_names", "type": "STRING", "links": None, "slot_index": 8},
+                {"name": "image_batch", "type": "IMAGE", "links": None, "slot_index": 9},
+                {"name": "count", "type": "INT", "links": None, "slot_index": 10},
             ],
-            "title": "Prep (caption + pose file)",
+            "title": "Prep (single pose → guide)",
             "properties": {"Node name for S&R": "CP_PoseTransferPrep"},
             "widgets_values": [
-                "slow_run_SE_00.pose",
-                "sword",
+                "ALL",
+                "ALL",
+                "01",
+                "none",
                 True,
                 True,
                 "none",
                 "",
                 "",
+                "",
+                "",
                 0,
                 0,
             ],
+            "widgets_values_named": {
+                "animation": "ALL",
+                "orientation": "ALL",
+                "frame": "01",
+                "prop": "none",
+                "align_to_source": True,
+                "auto_caption": True,
+                "prop2": "none",
+                "caption": "",
+                "extra": "",
+                "pose_list": "",
+                "pose_file": "",
+                "width": 0,
+                "height": 0,
+            },
         },
         {
             "id": 18,
@@ -809,6 +839,7 @@ def write_qwen():
                 {"name": "negative", "type": "CONDITIONING", "link": inp(10, 1)},
                 {"name": "control_net", "type": "CONTROL_NET", "link": inp(10, 2)},
                 {"name": "image", "type": "IMAGE", "link": inp(10, 3)},
+                {"name": "vae", "type": "VAE", "link": inp(10, 4)},
             ],
             "outputs": [
                 {
@@ -841,6 +872,22 @@ def write_qwen():
                 {"name": "IMAGE", "type": "IMAGE", "links": o[11].get(0), "slot_index": 0}
             ],
             "title": "Scale sprite",
+            "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
+            "widgets_values": ["lanczos", 1.0, 64],
+        },
+        {
+            "id": 19,
+            "type": "ImageScaleToTotalPixels",
+            "pos": [840, 660],
+            "size": [300, 106],
+            "flags": {},
+            "order": 10,
+            "mode": 0,
+            "inputs": [{"name": "image", "type": "IMAGE", "link": inp(19, 0)}],
+            "outputs": [
+                {"name": "IMAGE", "type": "IMAGE", "links": o[19].get(0), "slot_index": 0}
+            ],
+            "title": "Scale guide (match latent)",
             "properties": {"Node name for S&R": "ImageScaleToTotalPixels"},
             "widgets_values": ["lanczos", 1.0, 64],
         },
@@ -926,17 +973,18 @@ def write_qwen():
             "outputs": [],
             "properties": {"text": ""},
             "widgets_values": [
-                "CharacterPose — Qwen + ControlNet\n\n"
-                "source_pose = sprite + squelette detecte\n"
-                "preview_pose = pose cible seule\n"
-                "guide → ControlNetApplyAdvanced\n"
+                "CharacterPose — Qwen + ControlNet (single pose)\n\n"
+                "frame=01 (pas ALL) — multi-pose = Klein batch\n"
+                "guide scale 1 MP = meme res que sprite latent\n"
+                "VAE branche sur ControlNetApplyAdvanced\n"
+                "UNET = qwen_image_edit_2511 (edit)\n"
             ],
         },
     ]
 
     data = {
-        "last_node_id": 18,
-        "last_link_id": 24,
+        "last_node_id": 19,
+        "last_link_id": 27,
         "nodes": nodes,
         "links": links,
         "groups": [
@@ -969,14 +1017,14 @@ def write_qwen():
         "extra": {
             "info": {
                 "name": "CharacterPose — Qwen-Image-Edit + ControlNet",
-                "version": "0.5.1",
-                "description": "Fully wired Prep → ControlNet OpenPose → KSampler.",
+                "version": "0.5.2",
+                "description": "Single-pose Prep → scaled guide + VAE → ControlNet → KSampler.",
             }
         },
         "models": [
             {
-                "name": "qwen_image_edit_2511_fp8_e4m3fn.safetensors",
-                "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8_e4m3fn.safetensors",
+                "name": "qwen_image_edit_2511_fp8mixed.safetensors",
+                "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2511_fp8mixed.safetensors",
                 "directory": "diffusion_models",
             },
             {
