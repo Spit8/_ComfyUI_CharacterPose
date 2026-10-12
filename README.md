@@ -2,8 +2,7 @@
 
 Custom nodes for **identity-preserving 2D character pose transfer**: take a single sprite and generate the same character in new RPG poses while keeping art style and appearance.
 
-> **Fast path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + library `.pose` guide).  
-> **Hard pose lock:** **Qwen-Image-Edit** + ControlNet Union (`workflows/pose_transfer_qwen_controlnet.json`).  
+> **Main path:** **Flux.2 Klein** + `CP_PoseTransferPrep` (auto caption + library `.pose` guide) — see `workflows/pose_transfer_flux_klein.json`.  
 > Geometric warp (TPS / piecewise) melts cartoon sprites — do not use it as the main pipeline.
 
 ## Features
@@ -37,8 +36,7 @@ pip install -r ComfyUI_CharacterPose/requirements.txt
 | Pack | Needed for |
 |------|------------|
 | [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) | Optional DWPose extract / align |
-| ComfyUI core Flux.2 / Klein nodes | Fast Flux workflow |
-| ComfyUI Qwen-Image-Edit nodes | Hard-lock Qwen workflow |
+| ComfyUI core Flux.2 / Klein nodes | Flux Klein workflow |
 | [ComfyUI_IPAdapter_plus](https://github.com/cubiq/ComfyUI_IPAdapter_plus) | Optional SDXL `CharacterRepair` path |
 | `transformers` + Florence-2 weights | **Recommended** — detailed auto-captions for color/style lock (`CP_CharacterCaption` / Prep) |
 
@@ -56,8 +54,7 @@ custom_nodes/comfyui_controlnet_aux/ckpts/yzd-v/DWPose/
 
 | Goal | Workflow | Notes |
 |------|----------|--------|
-| Fast iteration (~4 steps) | `pose_transfer_flux_klein.json` | Dual reference; soft pose guidance |
-| Strict pose / multi-angle | `pose_transfer_qwen_controlnet.json` | ControlNet keypoints strength ~1.2–1.8 |
+| Pose transfer (~4 steps) | `pose_transfer_flux_klein.json` | Prep filters → Klein batch; soft pose guidance |
 | Mixamo `.pose` library | Wire `CP_PoseLibraryLoad` (+ optional warp) | Export via `mixamo_tools` CLI into `poses/` |
 
 ## Recommended workflow (Flux.2 Klein + Prep)
@@ -87,32 +84,9 @@ LoadImage (sprite)
 - Distilled Klein: ~4 steps, CFG `1`.
 - Prep **`align_to_source`** (default on) scales the library stick to the sprite, then **contains** it in the canvas (shrink + recenter with margin) so open Mixamo poses do not clip.
 - Prep selects poses **only** via filters (`animation` / `orientation` / `frame`, each `ALL` or one value) → **guide** + **image_batch** + **edit_prompts** (JSON, one prompt per pose with VIEW LOCK). `CP_KleinPoseBatch` runs **one sample at a time** (same quality as N=1) and writes progressive previews (`prefix_000`…). Narrow filters for a single pose. **Restart ComfyUI** after updating custom nodes before reloading `pose_transfer_flux_klein.json`.
-- Prep auto-prompt adds a **VIEW LOCK** from the `.pose` (`metadata.view` or filename `_NE` / `_TOP`…) so back views (NE/NO/N/TOP) are stated explicitly, with APPEARANCE LOCK from-behind — still soft on Klein; prefer Qwen ControlNet for hard rear angles.
+- Prep auto-prompt adds a **VIEW LOCK** from the `.pose` (`metadata.view` or filename `_NE` / `_TOP`…) so back views (NE/NO/N/TOP) are stated explicitly, with APPEARANCE LOCK from-behind — still soft on Klein.
 - If bones appear: the Prep prompt already includes anti-skeleton wording; change seed.
-- Klein has **no OpenPose ControlNet** — for a hard lock use the Qwen workflow.
-
-## Hard pose lock (Qwen-Image-Edit + ControlNet)
-
-Open: `workflows/pose_transfer_qwen_controlnet.json`
-
-```
-LoadImage → CP_PoseTransferPrep → guide + prompt
-Qwen-Image-Edit + ControlNet Union (InstantX) on the OpenPose guide
-→ SaveImage
-```
-
-### Models for Qwen path
-
-| File | Folder |
-|------|--------|
-| `qwen_image_edit_2511_fp8mixed.safetensors` (or `2511_bf16` / `2509_fp8_e4m3fn`) | `models/diffusion_models/` |
-| `qwen_2.5_vl_7b_fp8_scaled.safetensors` | `models/text_encoders/` |
-| `qwen_image_vae.safetensors` | `models/vae/` |
-| `Qwen-Image-InstantX-ControlNet-Union.safetensors` | `models/controlnet/` |
-
-If `TextEncodeQwenImageEdit` is missing on your ComfyUI build, use the native Qwen Edit text-encode node and convert its prompt widget to an input for the Prep `edit_prompt` STRING.
-
-Alternative: DiffSynth Union LoRA `qwen_image_union_diffsynth_lora.safetensors` (openpose mode) instead of InstantX ControlNet.
+- Klein has **no OpenPose ControlNet** — pose guidance is soft (reference latent + prompt).
 
 ## Pose library (Mixamo → `.pose`)
 
@@ -172,21 +146,19 @@ Node: `CP_PoseComposer3D` — separate from Prep. Use when you want a guide **wi
 | `CP_CharacterRepair` | SDXL img2img + IP-Adapter + optional ControlNet |
 | `CP_ExportSpriteSheet` / `CP_GenerateRPGSheet` | Sheet helpers |
 
-## Other workflows
+## Workflows
 
 | File | Notes |
 |------|--------|
-| `pose_transfer_flux_klein.json` | Fast path (Prep) |
-| `pose_transfer_qwen_controlnet.json` | Hard pose lock |
-| `pose_transfer_warp.json` | Legacy SDXL — keep `method=none` |
-| `poc_pose_transfer.json` / `character_pose_nodes.json` | Earlier experiments |
+| `pose_transfer_flux_klein.json` | Main path (Prep → Klein batch) — regenerate via `python workflows/_build_workflows.py` |
 
 ## Limitations
 
-- **Same-view bias:** a side/¾ sprite does not become a true front/back view for free; generative models approximate it (Qwen-Edit 2511 helps).
+- **Same-view bias:** a side/¾ sprite does not become a true front/back view for free; generative models approximate it.
 - Props are **guide strokes + prompt hints**, not a separate ControlNet channel (unless you feed `prop_mask` / canny yourself).
 - Florence-2 is **recommended** for detailed appearance; without `transformers`, Prep still injects a K-means **COLOR LOCK** palette into the prompt.
 - Geometric warp cannot invent limbs or camera angles; it only remaps pixels.
+- Klein pose lock is **soft** (no OpenPose ControlNet on this path).
 
 ## Dev / tests
 
@@ -202,5 +174,5 @@ MIT — see [LICENSE](LICENSE).
 ## Credits
 
 - Pose detection via [comfyui_controlnet_aux](https://github.com/Fannovel16/comfyui_controlnet_aux) / DWPose
-- Generative edit via Black Forest Labs **FLUX.2 Klein** and **Qwen-Image-Edit** in ComfyUI
+- Generative edit via Black Forest Labs **FLUX.2 Klein** in ComfyUI
 - Captioning via Microsoft **Florence-2** (optional)
